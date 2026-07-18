@@ -1,0 +1,84 @@
+substitutions:
+  ref: main
+
+esphome:
+  name: test-c4001-esp32-s3-idf
+  friendly_name: Test DFRobot C4001 Component with ESP32-S3 and ESP-IDF Framework
+
+esp32:
+  variant: ESP32S3
+  flash_size: 16MB
+  cpu_frequency: 240MHz
+  framework:
+    type: esp-idf
+
+external_components:
+  source:
+    type: git
+    url: https://github.com/mikelawrence/esphome-components-dfrobot-c4001
+    ref: ${ref}
+
+uart:
+  - id: c4001_uart
+    tx_pin: GPIO18
+    rx_pin: GPIO17
+    baud_rate: 9600
+
+binary_sensor:
+  - platform: dfrobot_c4001
+    config_changed:
+      name: Config Changed
+    occupancy:
+      id: occupancy
+      name: Occupancy
+
+button:
+  - platform: dfrobot_c4001
+    dfrobot_c4001_id: mmwave_sensor
+    config_save:
+      name: Config Save
+      entity_category: CONFIG
+
+number:
+  - platform: dfrobot_c4001
+    dfrobot_c4001_id: mmwave_sensor
+    max_range:
+      name: Range Max
+    min_range:
+      name: Range Min
+    trigger_range:
+      name: Range Trigger
+    hold_sensitivity:
+      name: Sensitivity Hold
+    trigger_sensitivity:
+      name: Sensitivity Trigger
+    on_latency:
+      name: Latency On
+    off_latency:
+      name: Latency Off
+    inhibit_time:
+      name: Inhibit Time
+
+sensor:
+  - platform: dfrobot_c4001
+    dfrobot_c4001_id: mmwave_sensor
+    target_distance:
+      name: Target Distance
+    target_speed:
+      name: Target Speed
+    target_energy:
+      name: Target Energy
+
+switch:
+  - platform: dfrobot_c4001
+    dfrobot_c4001_id: mmwave_sensor
+    led_enable:
+      name: Enable LED
+
+text_sensor:
+  - platform: dfrobot_c4001
+    dfrobot_c4001_id: mmwave_sensor
+    software_version:
+      name: Software Version
+    hardware_version:
+      name: Hardware Version
