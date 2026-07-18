@@ -13,7 +13,7 @@ esp32:
     type: arduino
 
 external_components:
-  - source: github://mikelawrence/esphome-component-dfrobot-c4001@{ref}
+  - source: github://mikelawrence/esphome-component-dfrobot-c4001@${ref}
 
 uart:
   - id: c4001_uart
