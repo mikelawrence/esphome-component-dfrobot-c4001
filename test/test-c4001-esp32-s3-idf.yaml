@@ -13,10 +13,7 @@ esp32:
     type: esp-idf
 
 external_components:
-  source:
-    type: git
-    url: https://github.com/mikelawrence/esphome-component-dfrobot-c4001
-    ref: ${ref}
+  - source: github://mikelawrence/esphome-component-dfrobot_c4001@{ref}
 
 uart:
   - id: c4001_uart
