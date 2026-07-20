@@ -13,13 +13,19 @@ esp32:
     type: arduino
 
 external_components:
-  - source: github://mikelawrence/esphome-component-dfrobot-c4001@${ref}
+  - source: github://mikelawrence/esphome-component-dfrobot-c4001@{ref}
 
 uart:
   - id: c4001_uart
     tx_pin: GPIO18
     rx_pin: GPIO17
     baud_rate: 9600
+
+dfrobot_c4001:
+  id: c4001_radar
+  uart_id: c4001_uart
+  model: SEN0609
+  mode: PRESENCE
 
 binary_sensor:
   - platform: dfrobot_c4001
@@ -31,14 +37,14 @@ binary_sensor:
 
 button:
   - platform: dfrobot_c4001
-    dfrobot_c4001_id: mmwave_sensor
+    dfrobot_c4001_id: c4001_radar
     config_save:
       name: Config Save
       entity_category: CONFIG
 
 number:
   - platform: dfrobot_c4001
-    dfrobot_c4001_id: mmwave_sensor
+    dfrobot_c4001_id: c4001_radar
     max_range:
       name: Range Max
     min_range:
@@ -56,25 +62,17 @@ number:
     inhibit_time:
       name: Inhibit Time
 
-sensor:
-  - platform: dfrobot_c4001
-    dfrobot_c4001_id: mmwave_sensor
-    target_distance:
-      name: Target Distance
-    target_speed:
-      name: Target Speed
-    target_energy:
-      name: Target Energy
-
 switch:
   - platform: dfrobot_c4001
-    dfrobot_c4001_id: mmwave_sensor
-    led_enable:
-      name: Enable LED
+    dfrobot_c4001_id: c4001_radar
+    out_led_enable:
+      name: C4001 Enable OUT LED
+    run_led_enable:
+      name: C4001 Enable RUN LED
 
 text_sensor:
   - platform: dfrobot_c4001
-    dfrobot_c4001_id: mmwave_sensor
+    dfrobot_c4001_id: c4001_radar
     software_version:
       name: Software Version
     hardware_version:
