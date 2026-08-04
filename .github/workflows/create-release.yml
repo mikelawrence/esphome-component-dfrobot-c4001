@@ -28,7 +28,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
-           set -euo pipefail
+          set -euo pipefail
 
           # Published releases only (no drafts).
           gh api --paginate "repos/${GH_REPO}/releases?per_page=100" \
