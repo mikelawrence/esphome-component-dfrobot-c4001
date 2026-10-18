@@ -8,7 +8,7 @@
 
 namespace esphome {
 namespace dfrobot_c4001 {
-static const char *const TAG = "dfrobot_c4001";
+ESPHOME_LOG_TAG(TAG, "dfrobot_c4001");
 const char ASCII_CR = 0x0D;
 const char ASCII_LF = 0x0A;
 

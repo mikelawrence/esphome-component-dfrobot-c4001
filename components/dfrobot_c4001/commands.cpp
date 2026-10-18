@@ -3,7 +3,7 @@
 
 namespace esphome {
 namespace dfrobot_c4001 {
-static const char *const TAG = "dfrobot_c4001.commands";
+ESPHOME_LOG_TAG(TAG, "dfrobot_c4001.commands");
 
 // returns
 //  negative number: failed, abs(return value) is the number of errors that occurred
