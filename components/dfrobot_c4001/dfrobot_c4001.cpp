@@ -1,7 +1,5 @@
 #include "dfrobot_c4001.h"
 
-#include <cmath>
-
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
@@ -517,7 +515,7 @@ void DFRobotC4001Hub::loop() {
       // negative result means errors occurred magnitude is number of errors
       if (result < 0) {
         this->ts_cmd_error_cnt_ -= result;
-        ESP_LOGV(TAG, "Queue: Error Count: %d", this->ts_cmd_error_cnt_);
+        ESP_LOGV(TAG, "Queue: Error Count: %" PRId32, this->ts_cmd_error_cnt_);
       }
       // dequeue the command
       this->cmd_queue_.dequeue();
@@ -537,7 +535,7 @@ uint8_t DFRobotC4001Hub::read_message_() {
     if (this->read_pos_ == MMWAVE_READ_BUFFER_LENGTH)
       this->read_pos_ = 0;
 
-    ESP_LOGVV(TAG, "Buffer pos: %u %d", this->read_pos_, byte);
+    ESP_LOGVV(TAG, "Buffer pos: %zu %d", this->read_pos_, byte);
 
     if (byte == ASCII_CR)
       continue;

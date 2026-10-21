@@ -1,6 +1,9 @@
 substitutions:
   ref: main
 
+logger:
+  level: VERY_VERBOSE
+
 esphome:
   name: test-c4001-esp32-s3-ard
   friendly_name: Test DFRobot C4001 Component with ESP32-S3 and Arduino Framework
