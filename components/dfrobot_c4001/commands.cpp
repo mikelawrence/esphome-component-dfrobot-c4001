@@ -150,8 +150,8 @@ uint8_t ReadStateCommand::execute(DFRobotC4001Hub *parent) {
           this->parent_->set_target_speed(target_speed.value());
           this->parent_->set_target_energy(target_energy.value());
           this->parent_->set_occupancy(true);
-          ESP_LOGV(TAG, "Recv Rpt: Target Detected, Dist=%.3f, Speed=%.3f, Energy=%d", target_distance.value(),
-                   target_speed.value(), (uint) target_energy.value());
+          ESP_LOGV(TAG, "Recv Rpt: Target Detected, Dist=%.3f, Speed=%.3f, Energy=%u", target_distance.value(),
+                   target_speed.value(), static_cast<unsigned int>(target_energy.value()));
           return true;  // command completed successfully
         } else {
           ESP_LOGD(TAG, "Error parsing Distance and Speed Detection Output");
