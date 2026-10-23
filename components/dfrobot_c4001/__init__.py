@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 from esphome.components import uart
 import esphome.config_validation as cv
-from esphome.const import CONF_ID, CONF_MODE, CONF_MODEL
+from esphome.const import CONF_ID, CONF_MODE, CONF_MODEL, __version__
 
 DEPENDENCIES = ["uart"]
 
@@ -57,9 +57,13 @@ FINAL_VALIDATE_SCHEMA = uart.final_validate_device_schema(
 
 
 async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
-    await cg.register_component(var, config)
-    await uart.register_uart_device(var, config)
+    # TODO: Remove this check when we drop support for ESPHome 2026.10.0 and older
+    if cv.Version.parse(__version__) >= cv.Version(2026, 11, 0):
+        var = await uart.new_uart_component(config)
+    else:
+        var = cg.new_Pvariable(config[CONF_ID])
+        await cg.register_component(var, config)
+        await uart.register_uart_device(var, config)
 
     cg.add(var.set_mode(config[CONF_MODE]))
     cg.add(var.set_model(config[CONF_MODEL]))
