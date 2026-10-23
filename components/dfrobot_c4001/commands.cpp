@@ -1,9 +1,16 @@
 #include "dfrobot_c4001.h"
 #include "commands.h"
 
+#include "esphome/core/log.h"
+#include "esphome/core/version.h"
+
 namespace esphome {
 namespace dfrobot_c4001 {
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 10, 0)
+ESPHOME_LOG_TAG(TAG, "dfrobot_c4001.commands");
+#else
 static const char *const TAG = "dfrobot_c4001.commands";
+#endif
 
 // returns
 //  negative number: failed, abs(return value) is the number of errors that occurred
