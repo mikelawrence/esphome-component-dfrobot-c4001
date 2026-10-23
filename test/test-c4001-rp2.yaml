@@ -1,6 +1,9 @@
 substitutions:
   ref: main
 
+logger:
+  level: VERY_VERBOSE
+
 esphome:
   name: test-c4001-rp2
   friendly_name: Test DFRobot C4001 Component with RP2
@@ -9,7 +12,7 @@ rp2:
   board: rpipicow
 
 external_components:
-  - source: github://mikelawrence/esphome-component-dfrobot-c4001@{ref}
+  - source: github://mikelawrence/esphome-component-dfrobot-c4001@${ref}
 
 uart:
   - id: c4001_uart
