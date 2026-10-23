@@ -20,18 +20,11 @@ jobs:
   check:
     name: Check ESPHome release
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        #### Modify below here to match your project ####
-        file:
-          - test/test-c4001-esp32-s3-idf
-          - test/test-c4001-esp32-s3-ard
-          - test/test-c4001-rp2
-        #### Modify above here to match your project ####
-        esphome-version:
-          - stable
-          - dev
+    outputs:
+      latest_tag: ${{ steps.esphome-release.outputs.tag }}
+      tested_tag: ${{ steps.test-release.outputs.tag }}
+      run_test: ${{ steps.test-conditions.outputs.run_test }}
+      commit: ${{ steps.test-conditions.outputs.commit }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
