@@ -4,8 +4,7 @@
 #include "esphome/core/log.h"
 #include "esphome/core/version.h"
 
-namespace esphome {
-namespace dfrobot_c4001 {
+namespace esphome::dfrobot_c4001 {
 #if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 10, 0)
 ESPHOME_LOG_TAG(TAG, "dfrobot_c4001.commands");
 #else
