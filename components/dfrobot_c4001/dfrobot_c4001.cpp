@@ -6,10 +6,15 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
+#include "esphome/core/version.h"
 
 namespace esphome {
 namespace dfrobot_c4001 {
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 10, 0)
+ESPHOME_LOG_TAG(TAG, "dfrobot_c4001");
+#else
 static const char *const TAG = "dfrobot_c4001";
+#endif
 const char ASCII_CR = 0x0D;
 const char ASCII_LF = 0x0A;
 
