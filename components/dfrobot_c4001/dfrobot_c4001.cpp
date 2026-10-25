@@ -1,5 +1,8 @@
 #include "dfrobot_c4001.h"
 
+#include <cstring>
+
+#include "esphome/core/application.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
@@ -319,52 +322,52 @@ void DFRobotC4001Hub::setup_module() {
   }
 #endif
   // stop the module so that configuration can be set
-  this->enqueue(make_unique<PowerCommand>(false));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
   // put the module is the requested mode
-  this->enqueue(make_unique<SetRunAppCommand>(this->mode_));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_SET_RUN_APP, this->mode_ != MODE_PRESENCE);
   // the module doesn't remember the RUN led state so it need to be set here
   // this->run_led_enable_ comes from flash which does remember between power cycles
-  this->enqueue(make_unique<SetLedModeCommand>(this->run_led_enable_));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_SET_LED_MODE, this->run_led_enable_);
   // the module remembers the OUT led state so it does not need to be set here
   // make sure the module output presence via uart
   if (this->mode_ == MODE_PRESENCE) {
-    this->enqueue(make_unique<SetUartOutputCommand>(true));
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_UART_OUTPUT, true);
   }
   // start the module
-  this->enqueue(make_unique<PowerCommand>(true));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, true);
 }
 
 void DFRobotC4001Hub::config_load() {
   // get dfrobot_c4001 current configuration
   // have to be in the right mode to read that mode's parameters
-  this->enqueue(make_unique<GetHWVCommand>());
-  this->enqueue(make_unique<GetSWVCommand>());
+  this->enqueue(CommandType::COMMAND_TYPE_GET_HWV);
+  this->enqueue(CommandType::COMMAND_TYPE_GET_SWV);
   // the module doesn't remember the RUN led state (controlled by LedMode command) so loading from module won't work
   // the OUT led state is controlled by GpioMode command and it is remembered by the module so loading does work
-  this->enqueue(make_unique<GetGpioModeCommand>());
+  this->enqueue(CommandType::COMMAND_TYPE_GET_GPIO_MODE);
 #ifdef USE_NUMBER
   if (this->min_range_number_ != nullptr)
-    this->enqueue(make_unique<GetRangeCommand>());
+    this->enqueue(CommandType::COMMAND_TYPE_GET_RANGE);
 #endif
   if (this->mode_ == MODE_PRESENCE) {
 #ifdef USE_NUMBER
     if (this->trigger_range_number_ != nullptr)
-      this->enqueue(make_unique<GetTrigRangeCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_TRIG_RANGE);
     if (this->hold_sensitivity_number_ != nullptr)
-      this->enqueue(make_unique<GetSensitivityCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_SENSITIVITY);
     if (this->on_latency_number_ != nullptr)
-      this->enqueue(make_unique<GetLatencyCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_LATENCY);
     if (this->inhibit_time_number_ != nullptr)
-      this->enqueue(make_unique<GetInhibitTimeCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_INHIBIT_TIME);
 #endif
   } else {
 #ifdef USE_NUMBER
     if (this->threshold_factor_number_ != nullptr)
-      this->enqueue(make_unique<GetThrFactorCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_THR_FACTOR);
 #endif
 #ifdef USE_SWITCH
     if (this->micro_motion_enable_switch_ != nullptr)
-      this->enqueue(make_unique<GetMicroMotionCommand>());
+      this->enqueue(CommandType::COMMAND_TYPE_GET_MICRO_MOTION);
 #endif
   }
   this->set_needs_save(false);
@@ -373,51 +376,51 @@ void DFRobotC4001Hub::config_load() {
 void DFRobotC4001Hub::config_save() {
   if (this->needs_save_) {
     this->flash_run_led_enable();
-    this->enqueue(make_unique<PowerCommand>(false));
-    this->enqueue(make_unique<SetLedModeCommand>(this->run_led_enable_));
-    this->enqueue(make_unique<SetGpioModeCommand>(this->out_led_enable_));
+    this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_LED_MODE, this->run_led_enable_);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_GPIO_MODE, this->out_led_enable_);
 #ifdef USE_NUMBER
     if (this->min_range_number_ != nullptr)
-      this->enqueue(make_unique<SetRangeCommand>(this->min_range_, this->max_range_));
+      this->enqueue(CommandType::COMMAND_TYPE_SET_RANGE, this->min_range_, this->max_range_);
 #endif
     if (this->mode_ == MODE_PRESENCE) {
 #ifdef USE_NUMBER
       if (this->trigger_range_number_ != nullptr)
-        this->enqueue(make_unique<SetTrigRangeCommand>(this->trigger_range_));
+        this->enqueue(CommandType::COMMAND_TYPE_SET_TRIG_RANGE, this->trigger_range_);
       if (this->hold_sensitivity_number_ != nullptr)
-        this->enqueue(make_unique<SetSensitivityCommand>(this->hold_sensitivity_, this->trigger_sensitivity_));
+        this->enqueue(CommandType::COMMAND_TYPE_SET_SENSITIVITY, this->hold_sensitivity_, this->trigger_sensitivity_);
       if (this->on_latency_number_ != nullptr)
-        this->enqueue(make_unique<SetLatencyCommand>(this->on_latency_, this->off_latency_));
+        this->enqueue(CommandType::COMMAND_TYPE_SET_LATENCY, this->on_latency_, this->off_latency_);
       if (this->inhibit_time_number_ != nullptr)
-        this->enqueue(make_unique<SetInhibitTimeCommand>(this->inhibit_time_));
+        this->enqueue(CommandType::COMMAND_TYPE_SET_INHIBIT_TIME, this->inhibit_time_);
 #endif
     } else {
 #ifdef USE_NUMBER
       if (this->threshold_factor_number_ != nullptr)
-        this->enqueue(make_unique<SetThrFactorCommand>(this->threshold_factor_));
+        this->enqueue(CommandType::COMMAND_TYPE_SET_THR_FACTOR, this->threshold_factor_);
 #endif
 #ifdef USE_SWITCH
       if (this->micro_motion_enable_switch_ != nullptr)
-        this->enqueue(make_unique<SetMicroMotionCommand>(this->micro_motion_enable_));
+        this->enqueue_flag(CommandType::COMMAND_TYPE_SET_MICRO_MOTION, this->micro_motion_enable_);
 #endif
     }
-    this->enqueue(make_unique<SaveCfgCommand>());
-    this->enqueue(make_unique<ResetSystemCommand>(true));
-    this->enqueue(make_unique<PowerCommand>(true));
+    this->enqueue(CommandType::COMMAND_TYPE_SAVE_CFG);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, true);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, true);
     this->set_needs_save(false);
   }
 }
 
 void DFRobotC4001Hub::factory_reset() {
   ESP_LOGD(TAG, "Factory Reset Started");
-  this->enqueue(make_unique<PowerCommand>(false));
-  this->enqueue(make_unique<FactoryResetCommand>());
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+  this->enqueue(CommandType::COMMAND_TYPE_FACTORY_RESET);
 }
 
 void DFRobotC4001Hub::restart() {
   ESP_LOGD(TAG, "Restart Started");
-  this->enqueue(make_unique<PowerCommand>(false));
-  this->enqueue(make_unique<ResetSystemCommand>(true));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, true);
 }
 
 void DFRobotC4001Hub::dump_config() {
@@ -489,7 +492,7 @@ void DFRobotC4001Hub::setup() {
   }
 #endif
   // setup the module
-  this->enqueue(make_unique<ResetSystemCommand>(false));
+  this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, false);
   this->setup_module();
   this->config_load();
 }
@@ -498,41 +501,65 @@ void DFRobotC4001Hub::loop() {
   if (this->is_failed()) {
     return;
   }
-  if (this->cmd_queue_.is_empty()) {
+  if (this->cmd_queue_.empty()) {
     // Command queue empty, first time this happens setup is complete
     if (!this->is_setup_) {
       this->is_setup_ = true;
       if (this->ts_cmd_error_cnt_ > 3) {
         this->mark_failed(LOG_STR("Too many errors"));
+        return;
       }
     }
     // Read sensor state
-    this->enqueue(make_unique<ReadStateCommand>());
+    this->read_state_();
+    return;
   }
   // Commands are non-blocking and need to be called repeatedly.
-  int8_t result = this->cmd_queue_.process(this);
-  if (result) {
-    if (this->cmd_queue_.is_retry_power_stop()) {
-      // add PowerCommand to the beginning of the queue to stop the sensor
-      this->enqueue(make_unique<PowerCommand>(false), true);
+  Command &cmd = this->cmd_queue_.front();
+  int8_t result = this->execute_(cmd);
+  if (result == 0)
+    return;
+  if (cmd.retry_power_stop) {
+    // add PowerCommand to the beginning of the queue to stop the sensor
+    Command stop;
+    stop.type = CommandType::COMMAND_TYPE_POWER;
+    stop.flag = false;
+    if (this->push_(stop, true))
       ESP_LOGV(TAG, "Queue: Retrying command after stopping sensor");
-    } else {
-      // negative result means errors occurred magnitude is number of errors
-      if (result < 0) {
-        this->ts_cmd_error_cnt_ -= result;
-        ESP_LOGV(TAG, "Queue: Error Count: %" PRId32, this->ts_cmd_error_cnt_);
-      }
-      // dequeue the command
-      this->cmd_queue_.dequeue();
+  } else {
+    // negative result means errors occurred magnitude is number of errors
+    if (result < 0) {
+      this->ts_cmd_error_cnt_ -= result;
+      ESP_LOGV(TAG, "Queue: Error Count: %" PRId32, this->ts_cmd_error_cnt_);
     }
+    // dequeue the command
+    this->cmd_queue_.pop_front();
   }
 }
 
-int8_t DFRobotC4001Hub::enqueue(std::unique_ptr<Command> cmd, bool first) {
-  return this->cmd_queue_.enqueue(std::move(cmd), first);  // Transfer ownership using std::move
+bool DFRobotC4001Hub::push_(const Command &cmd, bool first) {
+  if (first ? this->cmd_queue_.push_front(cmd) : this->cmd_queue_.push_back(cmd))
+    return true;
+  ESP_LOGE(TAG, "Command queue is full");
+  return false;
 }
 
-uint8_t DFRobotC4001Hub::read_message_() {
+bool DFRobotC4001Hub::enqueue(CommandType type, float a, float b) {
+  Command cmd;
+  cmd.type = type;
+  cmd.a = a;
+  cmd.b = b;
+  return this->push_(cmd, false);
+}
+
+bool DFRobotC4001Hub::enqueue_flag(CommandType type, bool flag) {
+  Command cmd;
+  cmd.type = type;
+  cmd.flag = flag;
+  return this->push_(cmd, false);
+}
+
+bool DFRobotC4001Hub::read_message_() {
   while (this->available()) {
     uint8_t byte;
     this->read_byte(&byte);
@@ -548,7 +575,7 @@ uint8_t DFRobotC4001Hub::read_message_() {
       byte = '?';  // needs to be valid utf8 string for log functions.
     this->read_buffer_[this->read_pos_] = byte;
 
-    if (byte == '>') {
+    if (byte == '>' && this->read_pos_ + 1 < MMWAVE_READ_BUFFER_LENGTH) {
       this->read_buffer_[++this->read_pos_] = ASCII_LF;
     }
 
@@ -556,11 +583,9 @@ uint8_t DFRobotC4001Hub::read_message_() {
       this->read_buffer_[this->read_pos_] = 0;
       this->read_pos_ = 0;
 #ifdef ESPHOME_LOG_HAS_VERBOSE
-      std::string message(this->read_buffer_);
-      if (!(str_startswith(message, "$DFHPD")) && !(str_startswith(message, "$DFDMD")))
+      if (strncmp(this->read_buffer_, "$DFHPD", 6) != 0 && strncmp(this->read_buffer_, "$DFDMD", 6) != 0)
         ESP_LOGV(TAG, "Recv Msg: %s", this->read_buffer_);
 #endif
-      // ESP_LOGV(TAG, "Recv Msg: %s", this->read_buffer_);
       return true;  // Full message in buffer
     } else {
       this->read_pos_++;
@@ -569,74 +594,19 @@ uint8_t DFRobotC4001Hub::read_message_() {
   return false;  // No full message yet
 }
 
-uint8_t DFRobotC4001Hub::send_cmd_(const char *cmd, uint32_t duration) {
+bool DFRobotC4001Hub::send_cmd_(const char *cmd, uint32_t duration) {
   // The interval between two commands must be larger than the specified duration (in ms).
-  if (millis() - this->ts_last_cmd_sent_ > duration) {
+  const uint32_t now = App.get_loop_component_start_time();
+  if (now - this->ts_last_cmd_sent_ > duration) {
     this->write_str(cmd);
     this->write_byte(ASCII_CR);
     this->write_byte(ASCII_LF);
-    this->ts_last_cmd_sent_ = millis();
+    this->ts_last_cmd_sent_ = now;
     ESP_LOGV(TAG, "Send Cmd: %s", cmd);
     return true;  // Command sent
   }
   // Could not send command yet as command duration did not fully pass yet.
   return false;
-}
-
-int8_t CircularCommandQueue::enqueue(std::unique_ptr<Command> cmd, bool first) {
-  if (this->is_full()) {
-    ESP_LOGE(TAG, "Command queue is full");
-    return -1;
-  }
-  if (first) {
-    if (this->is_empty())
-      this->rear_ = 0;
-    this->front_ = (this->front_ - 1) % COMMAND_QUEUE_SIZE;
-    this->commands_[this->front_] = std::move(cmd);  // Transfer ownership using std::move
-    return 1;
-  } else {
-    if (this->is_empty())
-      this->front_ = 0;
-    this->rear_ = (this->rear_ + 1) % COMMAND_QUEUE_SIZE;
-    this->commands_[this->rear_] = std::move(cmd);  // Transfer ownership using std::move
-    return 1;
-  }
-}
-
-bool CircularCommandQueue::is_retry_power_stop() {
-  if (this->is_empty()) {
-    return false;
-  } else {
-    return this->commands_[this->front_]->retry_power_stop;
-  }
-}
-
-std::unique_ptr<Command> CircularCommandQueue::dequeue() {
-  if (this->is_empty())
-    return nullptr;
-  std::unique_ptr<Command> dequeued_cmd = std::move(this->commands_[this->front_]);
-  if (this->front_ == this->rear_) {
-    this->front_ = -1;
-    this->rear_ = -1;
-  } else {
-    this->front_ = (this->front_ + 1) % COMMAND_QUEUE_SIZE;
-  }
-  return dequeued_cmd;
-}
-
-bool CircularCommandQueue::is_empty() { return this->front_ == -1; }
-
-// queue is full when there is 1 space left
-bool CircularCommandQueue::is_full() { return (this->rear_ + 2) % COMMAND_QUEUE_SIZE == this->front_; }
-
-// Run execute method of first in line command.
-// Execute is non-blocking and has to be called until it returns 1.
-int8_t CircularCommandQueue::process(DFRobotC4001Hub *parent) {
-  if (!is_empty()) {
-    return this->commands_[this->front_]->execute(parent);
-  } else {
-    return true;
-  }
 }
 
 }  // namespace dfrobot_c4001

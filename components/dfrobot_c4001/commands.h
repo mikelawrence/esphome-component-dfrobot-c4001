@@ -1,13 +1,15 @@
 #pragma once
 
-#include "esphome/core/helpers.h"
-#include "esphome/core/log.h"
+#include <cmath>
+#include <cstdint>
 
 namespace esphome {
 namespace dfrobot_c4001 {
-class DFRobotC4001Hub;
+
+static constexpr uint8_t COMMAND_QUEUE_SIZE = 32;
+
 // Enumeration for Command States
-enum CommandState {
+enum CommandState : uint8_t {
   STATE_CMD_SEND = 0,  // command needs to be sent
   STATE_WAIT_ECHO,     // command was sent, now waiting for command echo
   STATE_PROCESS,       // command in process
@@ -15,204 +17,64 @@ enum CommandState {
   STATE_DONE,
 };
 
-// Use command queue and time stamps to avoid blocking.
-// When component has run time, check if minimum time (1s) between
-// commands has passed. After that run a command from the queue.
-class Command {
+enum class CommandType : uint8_t {
+  COMMAND_TYPE_POWER,
+  COMMAND_TYPE_GET_RANGE,
+  COMMAND_TYPE_SET_RANGE,
+  COMMAND_TYPE_GET_TRIG_RANGE,
+  COMMAND_TYPE_SET_TRIG_RANGE,
+  COMMAND_TYPE_GET_SENSITIVITY,
+  COMMAND_TYPE_SET_SENSITIVITY,
+  COMMAND_TYPE_GET_LATENCY,
+  COMMAND_TYPE_SET_LATENCY,
+  COMMAND_TYPE_GET_INHIBIT_TIME,
+  COMMAND_TYPE_SET_INHIBIT_TIME,
+  COMMAND_TYPE_GET_THR_FACTOR,
+  COMMAND_TYPE_SET_THR_FACTOR,
+  COMMAND_TYPE_SET_UART_OUTPUT,
+  COMMAND_TYPE_SET_LED_MODE,
+  COMMAND_TYPE_SET_GPIO_MODE,
+  COMMAND_TYPE_GET_GPIO_MODE,
+  COMMAND_TYPE_GET_MICRO_MOTION,
+  COMMAND_TYPE_SET_MICRO_MOTION,
+  COMMAND_TYPE_FACTORY_RESET,
+  COMMAND_TYPE_RESET_SYSTEM,
+  COMMAND_TYPE_SAVE_CFG,
+  COMMAND_TYPE_SET_RUN_APP,
+  COMMAND_TYPE_GET_HWV,
+  COMMAND_TYPE_GET_SWV,
+};
+
+// A queued command, stored by value (no heap allocation).
+// a/b hold the float arguments of set commands or the parsed values of get commands (NAN = not parsed).
+// flag holds the on/off argument (power, LED, UART, GPIO, micro motion, run app, reset read_config).
+struct Command {
+  CommandType type{CommandType::COMMAND_TYPE_POWER};
+  uint8_t state{STATE_CMD_SEND};
+  int8_t retries_left{2};
+  int8_t error_count{0};
+  bool done{false};
+  bool error{false};
+  bool retry_power_stop{false};
+  bool flag{false};
+  float a{NAN};
+  float b{NAN};
+};
+
+// Fixed-size ring buffer of commands. push_back keeps one slot free so a sensorStop
+// can always be pushed to the front when a command reports "sensor is not stopped".
+class CommandQueue {
  public:
-  virtual ~Command() = default;
-  virtual uint8_t execute(DFRobotC4001Hub *parent);
-  virtual void on_message();
-  uint8_t retry_power_stop{false};
+  bool push_back(const Command &cmd);
+  bool push_front(const Command &cmd);
+  void pop_front();
+  Command &front() { return this->commands_[this->head_]; }
+  bool empty() const { return this->count_ == 0; }
 
  protected:
-  DFRobotC4001Hub *parent_{nullptr};
-  uint8_t state_{STATE_CMD_SEND};
-  uint8_t done_{false};
-  uint8_t error_{false};
-  std::string cmd_;
-  char *read_buffer_{nullptr};
-  int8_t error_count_{0};
-  int8_t retries_left_{2};
-  uint32_t cmd_duration_ms_{10};
-  uint32_t timeout_ms_{1500};
-};
-
-class ReadStateCommand : public Command {
- public:
-  uint8_t execute(DFRobotC4001Hub *parent) override;
-};
-
-class PowerCommand : public Command {
- public:
-  PowerCommand(bool power_on);
-};
-
-class GetRangeCommand : public Command {
- public:
-  GetRangeCommand();
-  void on_message() override;
-
- protected:
-  optional<float> min_range_;
-  optional<float> max_range_;
-};
-
-class SetRangeCommand : public Command {
- public:
-  SetRangeCommand(float min_range, float max_range);
-};
-
-class GetTrigRangeCommand : public Command {
- public:
-  GetTrigRangeCommand();
-  void on_message() override;
-
- protected:
-  optional<float> trigger_range_;
-};
-
-class SetTrigRangeCommand : public Command {
- public:
-  SetTrigRangeCommand(float trigger_range);
-};
-
-class GetSensitivityCommand : public Command {
- public:
-  GetSensitivityCommand();
-  void on_message() override;
-
- protected:
-  optional<float> hold_sensitivity_;
-  optional<float> trigger_sensitivity_;
-};
-
-class SetSensitivityCommand : public Command {
- public:
-  SetSensitivityCommand(float hold_sensitivity, float trigger_sensitivity);
-};
-
-class GetLatencyCommand : public Command {
- public:
-  GetLatencyCommand();
-  void on_message() override;
-
- protected:
-  optional<float> on_latency_;
-  optional<float> off_latency_;
-};
-
-class SetLatencyCommand : public Command {
- public:
-  SetLatencyCommand(float on_latency, float off_latency);
-};
-
-class GetInhibitTimeCommand : public Command {
- public:
-  GetInhibitTimeCommand();
-  void on_message() override;
-
- protected:
-  optional<float> inhibit_time_;
-};
-
-class SetInhibitTimeCommand : public Command {
- public:
-  SetInhibitTimeCommand(float inhibit_time);
-};
-
-class GetThrFactorCommand : public Command {
- public:
-  GetThrFactorCommand();
-  void on_message() override;
-
- protected:
-  optional<float> threshold_factor_;
-};
-
-class SetThrFactorCommand : public Command {
- public:
-  SetThrFactorCommand(float threshold_factor);
-};
-
-class SetUartOutputCommand : public Command {
- public:
-  SetUartOutputCommand(bool enable);
-};
-
-class SetLedModeCommand : public Command {
- public:
-  SetLedModeCommand(bool value);
-};
-
-class SetGpioModeCommand : public Command {
- public:
-  SetGpioModeCommand(bool value);
-};
-
-class GetGpioModeCommand : public Command {
- public:
-  GetGpioModeCommand();
-  void on_message() override;
-
- protected:
-  optional<uint8_t> value_;
-};
-
-class GetMicroMotionCommand : public Command {
- public:
-  GetMicroMotionCommand();
-  void on_message() override;
-
- protected:
-  optional<bool> micro_motion_;
-};
-
-class SetMicroMotionCommand : public Command {
- public:
-  SetMicroMotionCommand(bool enable);
-  void on_message() override;
-
- protected:
-  bool micro_motion_;
-};
-
-class FactoryResetCommand : public Command {
- public:
-  FactoryResetCommand();
-  void on_message() override;
-};
-
-class ResetSystemCommand : public Command {
- public:
-  ResetSystemCommand(bool read_config);
-  void on_message() override;
-
- protected:
-  bool read_config_;
-};
-
-class SaveCfgCommand : public Command {
- public:
-  SaveCfgCommand();
-  void on_message() override;
-};
-
-class SetRunAppCommand : public Command {
- public:
-  SetRunAppCommand(uint8_t mode);
-};
-
-class GetHWVCommand : public Command {
- public:
-  GetHWVCommand();
-  void on_message() override;
-};
-
-class GetSWVCommand : public Command {
- public:
-  GetSWVCommand();
-  void on_message() override;
+  Command commands_[COMMAND_QUEUE_SIZE];
+  uint8_t head_{0};
+  uint8_t count_{0};
 };
 
 }  // namespace dfrobot_c4001
