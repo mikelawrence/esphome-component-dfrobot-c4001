@@ -1,4 +1,4 @@
-# ESPHome Component DFRobot C4001
+ # ESPHome Component DFRobot C4001
 
 <p align="center">
     <img src="https://dfimg.dfrobot.com/enshop/SEN0609/SEN0609_Main_01.jpg" width="50%"><br />
@@ -230,14 +230,12 @@ Example in lambdas...
 
 ## Development with VS Code Dev Containers
 
-Open this component directory as the VS Code workspace and reopen it in the Dev Container. All component checkouts share the same persistent ESPHome, PlatformIO, and pip cache volumes; Docker also reuses locally downloaded ESPHome images.
+Open this component directory as the VS Code workspace, then choose **Reopen in Container**. Docker provides the ESPHome development environment and shares persistent ESPHome, PlatformIO, and pip caches between component checkouts.
 
-Run the VS Code task **Clear cached downloads** to empty the shared cache volumes and remove locally downloaded `ghcr.io/esphome/esphome` images. Close the Dev Container before running the task so Docker can remove images that are in use.
+Run a task from **Terminal > Run Task**. The default build task is also available from **Terminal > Run Build Task**. The three tasks are:
 
-On Windows, run the VS Code task **Build ESPHome test configs** to compile every `.yaml` and `.yml` file under `test/` with the ESPHome `stable`, `beta`, and `dev` images. The script detects the GitHub owner/repository from the checkout's `origin` remote and replaces matching ESPHome GitHub component sources with the local `components/` directory in temporary copies of the test files. The original test YAML files are not modified.
+1. **ML ESPHome: Build ESPHome test configs** — Runs the validation task first and stops if validation fails. If validation passes, compiles every `.yaml` and `.yml` file under `test/` with the ESPHome `stable`, `beta`, and `dev` images. The script creates temporary copies of the test files, points matching GitHub component sources at this checkout's local `components/` directory, then removes the temporary files. Your original test configurations are not modified. This is the integration/build test; there is no separate unit-test runner.
+2. **ML ESPHome: Validate ESPHome component** — Applies supported automatic fixes, then checks the component without compiling test configurations. Fixes include C/C++ formatting, Ruff formatting and safe lint fixes, pyupgrade, and portable text conventions. It then runs strict YAML linting, C/C++ formatting checks, Ruff format/lint, flake8, pylint, pyupgrade verification, and ESPHome-style text convention checks. Some findings, including yamllint, flake8, pylint, and semantic or unsupported lint issues, require manual attention. Tool versions and lint settings follow ESPHome CI and this repository's `.yamllint`, `.clang-format`, `.flake8`, and `pyproject.toml` files. clang-tidy is not included because it requires PlatformIO compilation metadata.
+3. **ML ESPHome: Clear cached downloads** — Empties the shared ESPHome, PlatformIO, and pip cache volumes and removes locally downloaded `ghcr.io/esphome/esphome` Docker images. Close the Dev Container before running this task so Docker can remove images that are in use. The next build or validation will need to download the required files and images again.
 
-Run the separate VS Code task **Validate ESPHome component** for strict YAML linting, C/C++ formatting, Ruff format/lint, flake8, pylint, pyupgrade, and ESPHome-style text convention checks. Tool versions are pinned to the versions used by ESPHome CI, and the existing `.yamllint`, `.clang-format`, `.flake8`, and `pyproject.toml` configurations are used. clang-tidy is not included because it requires ESPHome's PlatformIO compilation metadata, which is not present in a standalone component checkout.
-
-Use **Fix ESPHome component formatting/lint** to apply clang-format, Ruff formatting and safe Ruff lint fixes, pyupgrade, and portable text fixes, then rerun validation. `yamllint`, flake8, pylint, and semantic or unsupported lint findings are not automatically rewritten and will be reported for manual attention.
-
-The build script can also be run directly with `-ConfigDirectory`, `-ComponentsDirectory`, and `-Versions` to select ESPHome tags, or with `-Image` to use one custom image. If the checkout does not have a GitHub `origin`, pass `-ComponentSource owner/repository` explicitly.
+The build task detects the GitHub owner and repository from the checkout's `origin` remote. If there is no GitHub `origin`, run `.devcontainer\build.ps1` directly with `-ComponentSource owner/repository`. To select ESPHome versions, pass `-Versions @("dev")`; to use one custom image, pass `-Image ghcr.io/esphome/esphome:<tag>`.
