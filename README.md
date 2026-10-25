@@ -34,8 +34,9 @@ uart:
     
 dfrobot_c4001:
   id: mmwave_sensor
-  uart_id: mmwave_uart
+  uart_id: c4001_uart
   mode: PRESENCE
+  model: SEN0609
 ```
 
 ## Configuration Variables
@@ -45,6 +46,8 @@ dfrobot_c4001:
 * **uart_id** (*Optional*, [ID](https://esphome.io/guides/configuration-types/#id)): Manually specify the ID of the UART Component to use. Required if you have multiple UARTs configured.
 
 * **mode** (*Required*, enumeration): This sets the operation mode of the sensor. Options are `PRESENCE` and `SPEED_AND_DISTANCE`.
+
+* **model** (*Required*, enumeration): The sensor model. Options are `SEN0609` and `SEN0610`.
 
 ## Buttons
 
@@ -156,19 +159,22 @@ The `dfrobot_c4001` switch allows you to enable the output LED on your DFRobot C
 switch:
   - platform: dfrobot_c4001
     dfrobot_c4001_id: mmwave_sensor
-    led_enable:
-      name: Enable LED
+    out_led_enable:
+      name: Output LED
+    run_led_enable:
+      name: Run LED
 ```
 
 ### Configuration Variables
 
 * **dfrobot_c4001_id** (*Optional*, [ID](https://esphome.io/guides/configuration-types/#id)): Manually specify the ID for the DFRobot C4001 component. Required if there are multiple DFRobot C4001s configured.
-* **led_enable** (*Optional*): When turned on the green LED will flash when the sensor has been started. The blue LED cannot be disabled with this command. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
+* **out_led_enable** (*Optional*): Controls the sensor's output LED. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
+* **run_led_enable** (*Optional*): Controls the sensor's run LED. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 * **micro_motion_enable** (*Optional*): Turns on micro motion mode. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 
 ## Text Sensors
 
-The `dfrobot_c4001` text sensors report `software version` and `firmware version` from your DFRobot C4001.
+The `dfrobot_c4001` text sensors report software and hardware versions from your DFRobot C4001.
 
 ```yaml
 text_sensor:
@@ -183,8 +189,8 @@ text_sensor:
 ### Configuration Variables
 
 * **dfrobot_c4001_id** (*Optional*, [ID](https://esphome.io/guides/configuration-types/#id)): Manually specify the ID for the DFRobot C4001 component. Required if there are multiple DFRobot C4001s configured.
-* **software_version** (*Optional*): Software Version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/sensor/#base-text-sensor-configuration).
-* **firmware_version** (*Optional*): Firmware Version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
+* **software_version** (*Optional*): Software version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
+* **hardware_version** (*Optional*): Hardware version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
 
 ## Actions
 
