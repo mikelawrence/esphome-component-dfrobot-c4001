@@ -9,11 +9,9 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
-namespace esphome {
-namespace dfrobot_c4001 {
+namespace esphome::dfrobot_c4001 {
 static const char *const TAG = "dfrobot_c4001.commands";
 
-static constexpr uint32_t CMD_DURATION_MS = 10;
 static constexpr uint32_t CMD_TIMEOUT_MS = 1500;
 
 static const char *safe_token(const char *token) { return token != nullptr ? token : ""; }
@@ -156,9 +154,8 @@ int8_t DFRobotC4001Hub::execute_(Command &cmd) {
     cmd.error = false;
     cmd.retry_power_stop = false;
     this->format_command_(cmd, this->cmd_buf_, sizeof(this->cmd_buf_));
-    if (this->send_cmd_(this->cmd_buf_, CMD_DURATION_MS)) {
-      cmd.state = STATE_WAIT_ECHO;
-    }
+    this->send_cmd_(this->cmd_buf_);
+    cmd.state = STATE_WAIT_ECHO;
     return 0;
   }
   if (cmd.state == STATE_DONE)
@@ -447,5 +444,4 @@ void DFRobotC4001Hub::read_state_() {
   }
 }
 
-}  // namespace dfrobot_c4001
-}  // namespace esphome
+}  // namespace esphome::dfrobot_c4001

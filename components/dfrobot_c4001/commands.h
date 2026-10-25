@@ -3,8 +3,7 @@
 #include <cmath>
 #include <cstdint>
 
-namespace esphome {
-namespace dfrobot_c4001 {
+namespace esphome::dfrobot_c4001 {
 
 static constexpr uint8_t COMMAND_QUEUE_SIZE = 32;
 
@@ -77,5 +76,4 @@ class CommandQueue {
   uint8_t count_{0};
 };
 
-}  // namespace dfrobot_c4001
-}  // namespace esphome
+}  // namespace esphome::dfrobot_c4001

@@ -7,31 +7,30 @@
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
 
-namespace esphome {
-namespace dfrobot_c4001 {
+namespace esphome::dfrobot_c4001 {
 static const char *const TAG = "dfrobot_c4001";
 const char ASCII_CR = 0x0D;
 const char ASCII_LF = 0x0A;
 
-static inline const char *mode_to_str(DFRobotMode mode) {
+static const LogString *mode_to_str(DFRobotMode mode) {
   switch (mode) {
     case MODE_PRESENCE:
-      return "PRESENCE";
+      return LOG_STR("PRESENCE");
     case MODE_SPEED_AND_DISTANCE:
-      return "SPEED_AND_DISTANCE";
+      return LOG_STR("SPEED_AND_DISTANCE");
     default:
-      return "UNKNOWN";
+      return LOG_STR("UNKNOWN");
   }
 }
 
-static inline const char *model_to_str(DFRobotModel model) {
+static const LogString *model_to_str(DFRobotModel model) {
   switch (model) {
     case MODEL_SEN0609:
-      return "SEN0609";
+      return LOG_STR("SEN0609");
     case MODEL_SEN0610:
-      return "SEN0610";
+      return LOG_STR("SEN0610");
     default:
-      return "UNKNOWN";
+      return LOG_STR("UNKNOWN");
   }
 }
 
@@ -425,14 +424,14 @@ void DFRobotC4001Hub::dump_config() {
                 "  HW Version: %s\n"
                 "  Model: %s\n"
                 "  Mode: %s\n",
-                this->sw_version_.c_str(), this->hw_version_.c_str(), model_to_str(this->model_),
-                mode_to_str(this->mode_));
+                this->sw_version_.c_str(), this->hw_version_.c_str(), LOG_STR_ARG(model_to_str(this->model_)),
+                LOG_STR_ARG(mode_to_str(this->mode_)));
   bool models_good = this->model_ == this->hw_model_;
   if (this->hw_model_ == MODEL_UNKNOWN) {
     models_good = true;
   }
   if (!models_good) {
-    ESP_LOGW(TAG, "HW Version indicates a %s, could be an issue", model_to_str(this->model_));
+    ESP_LOGW(TAG, "HW Version indicates a %s, could be an issue", LOG_STR_ARG(model_to_str(this->model_)));
   }
 #ifdef USE_BUTTON
   ESP_LOGCONFIG(TAG, "Buttons:");
@@ -500,9 +499,11 @@ void DFRobotC4001Hub::loop() {
     // Command queue empty, first time this happens setup is complete
     if (!this->is_setup_) {
       this->is_setup_ = true;
+      // This used to call mark_failed(), but mark_failed() is only for setup() and the startup command
+      // sequence finishes here in loop(). Report a warning instead; the next successful command clears it.
       if (this->ts_cmd_error_cnt_ > 3) {
-        this->mark_failed(LOG_STR("Too many errors"));
-        return;
+        ESP_LOGW(TAG, "Too many errors during setup (%" PRId32 ")", this->ts_cmd_error_cnt_);
+        this->status_set_warning();
       }
     }
     // Read sensor state
@@ -526,6 +527,8 @@ void DFRobotC4001Hub::loop() {
     if (result < 0) {
       this->ts_cmd_error_cnt_ -= result;
       ESP_LOGV(TAG, "Queue: Error Count: %" PRId32, this->ts_cmd_error_cnt_);
+    } else if (this->status_has_warning()) {
+      this->status_clear_warning();
     }
     // dequeue the command
     this->cmd_queue_.pop_front();
@@ -589,20 +592,15 @@ bool DFRobotC4001Hub::read_message_() {
   return false;  // No full message yet
 }
 
-bool DFRobotC4001Hub::send_cmd_(const char *cmd, uint32_t duration) {
-  // The interval between two commands must be larger than the specified duration (in ms).
-  const uint32_t now = App.get_loop_component_start_time();
-  if (now - this->ts_last_cmd_sent_ > duration) {
-    this->write_str(cmd);
-    this->write_byte(ASCII_CR);
-    this->write_byte(ASCII_LF);
-    this->ts_last_cmd_sent_ = now;
-    ESP_LOGV(TAG, "Send Cmd: %s", cmd);
-    return true;  // Command sent
-  }
-  // Could not send command yet as command duration did not fully pass yet.
-  return false;
+// There is no minimum spacing between commands. A 10 ms gate used to sit here, but the ESPHome main
+// loop runs every 16 ms, so the gate passed on every loop and never held anything back. Commands are
+// still serialized: the next one is only sent after the previous one finishes (prompt, retry or timeout).
+void DFRobotC4001Hub::send_cmd_(const char *cmd) {
+  this->write_str(cmd);
+  this->write_byte(ASCII_CR);
+  this->write_byte(ASCII_LF);
+  this->ts_last_cmd_sent_ = App.get_loop_component_start_time();
+  ESP_LOGV(TAG, "Send Cmd: %s", cmd);
 }
 
-}  // namespace dfrobot_c4001
-}  // namespace esphome
+}  // namespace esphome::dfrobot_c4001
