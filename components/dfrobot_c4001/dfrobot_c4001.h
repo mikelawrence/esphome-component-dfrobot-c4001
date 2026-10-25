@@ -27,8 +27,7 @@
 
 #include "commands.h"
 
-namespace esphome {
-namespace dfrobot_c4001 {
+namespace esphome::dfrobot_c4001 {
 // Enumeration for RunApp or Sensor Mode
 enum DFRobotMode : uint8_t {
   MODE_PRESENCE = 0,
@@ -161,7 +160,7 @@ class DFRobotC4001Hub : public uart::UARTDevice, public Component {
   int32_t ts_cmd_error_cnt_{0};
 
   bool read_message_();
-  bool send_cmd_(const char *cmd, uint32_t duration);
+  void send_cmd_(const char *cmd);
   bool push_(const Command &cmd, bool first);
   int8_t execute_(Command &cmd);
   void on_message_(Command &cmd);
@@ -170,5 +169,4 @@ class DFRobotC4001Hub : public uart::UARTDevice, public Component {
   void read_state_();
 };
 
-}  // namespace dfrobot_c4001
-}  // namespace esphome
+}  // namespace esphome::dfrobot_c4001
