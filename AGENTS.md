@@ -4,6 +4,7 @@ First read the [ESPHome AI Collaboration Guide](https://github.com/esphome/espho
 
 - This repository does not have a dev branch use main instead
 - Pull Requests should use this repository's .github/PULL_REQUEST_TEMPLATE.md
+- Pull Requests do not have any limit on size.
 
 ## Local Builds and testing
 
