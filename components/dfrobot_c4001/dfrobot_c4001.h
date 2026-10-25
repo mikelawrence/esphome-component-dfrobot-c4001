@@ -43,23 +43,7 @@ enum DFRobotModel : uint8_t {
 };
 
 const uint8_t MMWAVE_READ_BUFFER_LENGTH = 64;
-
-static const uint8_t COMMAND_QUEUE_SIZE = 32;
-
-class CircularCommandQueue {
- public:
-  int8_t enqueue(std::unique_ptr<Command> cmd, bool first = false);
-  std::unique_ptr<Command> dequeue();
-  bool is_retry_power_stop();
-  bool is_empty();
-  bool is_full();
-  int8_t process(DFRobotC4001Hub *parent);
-
- protected:
-  int front_{-1};
-  int rear_{-1};
-  std::unique_ptr<Command> commands_[COMMAND_QUEUE_SIZE];
-};
+const uint8_t MMWAVE_CMD_BUFFER_LENGTH = 48;
 
 class DFRobotC4001Hub : public uart::UARTDevice, public Component {
 #ifdef USE_BINARY_SENSOR
@@ -134,7 +118,10 @@ class DFRobotC4001Hub : public uart::UARTDevice, public Component {
   void set_target_distance(float value);
   void set_target_speed(float value);
   void set_target_energy(float value);
-  int8_t enqueue(std::unique_ptr<Command> cmd, bool first = false);
+  /// Queue a command with up to two float arguments (set commands) or none (get commands)
+  bool enqueue(CommandType type, float a = NAN, float b = NAN);
+  /// Queue a command with an on/off argument
+  bool enqueue_flag(CommandType type, bool flag);
 
  protected:
   bool is_setup_{false};
@@ -167,15 +154,20 @@ class DFRobotC4001Hub : public uart::UARTDevice, public Component {
 
   char read_buffer_[MMWAVE_READ_BUFFER_LENGTH];
   size_t read_pos_{0};
-  CircularCommandQueue cmd_queue_;
+  // Text of the command at the front of the queue, formatted when it is sent
+  char cmd_buf_[MMWAVE_CMD_BUFFER_LENGTH]{};
+  CommandQueue cmd_queue_;
   uint32_t ts_last_cmd_sent_{0};
   int32_t ts_cmd_error_cnt_{0};
 
-  uint8_t read_message_();
-  uint8_t send_cmd_(const char *cmd, uint32_t duration);
-
-  friend class Command;
-  friend class ReadStateCommand;
+  bool read_message_();
+  bool send_cmd_(const char *cmd, uint32_t duration);
+  bool push_(const Command &cmd, bool first);
+  int8_t execute_(Command &cmd);
+  void on_message_(Command &cmd);
+  bool parse_response_(Command &cmd, uint8_t skip, uint8_t count);
+  void format_command_(const Command &cmd, char *buf, size_t size) const;
+  void read_state_();
 };
 
 }  // namespace dfrobot_c4001

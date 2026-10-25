@@ -1,469 +1,447 @@
 #include "dfrobot_c4001.h"
 #include "commands.h"
 
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+
+#include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
+
 namespace esphome {
 namespace dfrobot_c4001 {
 static const char *const TAG = "dfrobot_c4001.commands";
+
+static const uint32_t CMD_DURATION_MS = 10;
+static const uint32_t CMD_TIMEOUT_MS = 1500;
+
+static const char *safe_token(const char *token) { return token != nullptr ? token : ""; }
+
+static float parse_float(const char *token) {
+  if (token == nullptr)
+    return NAN;
+  auto value = parse_number<float>(token);
+  return value.has_value() ? value.value() : NAN;
+}
+
+static void parse_failed(Command &cmd) {
+  ESP_LOGD(TAG, "Failed to parse response");
+  cmd.error = true;
+  cmd.done = true;  // go to WAIT_PROMPT so the retry logic runs
+}
+
+bool CommandQueue::push_back(const Command &cmd) {
+  if (this->count_ >= COMMAND_QUEUE_SIZE - 1)
+    return false;
+  this->commands_[(this->head_ + this->count_) % COMMAND_QUEUE_SIZE] = cmd;
+  this->count_++;
+  return true;
+}
+
+bool CommandQueue::push_front(const Command &cmd) {
+  if (this->count_ >= COMMAND_QUEUE_SIZE)
+    return false;
+  this->head_ = (this->head_ + COMMAND_QUEUE_SIZE - 1) % COMMAND_QUEUE_SIZE;
+  this->commands_[this->head_] = cmd;
+  this->count_++;
+  return true;
+}
+
+void CommandQueue::pop_front() {
+  if (this->count_ == 0)
+    return;
+  this->head_ = (this->head_ + 1) % COMMAND_QUEUE_SIZE;
+  this->count_--;
+}
+
+void DFRobotC4001Hub::format_command_(const Command &cmd, char *buf, size_t size) const {
+  switch (cmd.type) {
+    case CommandType::POWER:
+      snprintf(buf, size, "%s", cmd.flag ? "sensorStart" : "sensorStop");
+      break;
+    case CommandType::GET_RANGE:
+      snprintf(buf, size, "getRange");
+      break;
+    case CommandType::SET_RANGE:
+      snprintf(buf, size, "setRange %.3f %.3f", cmd.a, cmd.b);
+      break;
+    case CommandType::GET_TRIG_RANGE:
+      snprintf(buf, size, "getTrigRange");
+      break;
+    case CommandType::SET_TRIG_RANGE:
+      snprintf(buf, size, "setTrigRange %.3f", cmd.a);
+      break;
+    case CommandType::GET_SENSITIVITY:
+      snprintf(buf, size, "getSensitivity");
+      break;
+    case CommandType::SET_SENSITIVITY:
+      snprintf(buf, size, "setSensitivity %.0f %.0f", roundf(cmd.a), roundf(cmd.b));
+      break;
+    case CommandType::GET_LATENCY:
+      snprintf(buf, size, "getLatency");
+      break;
+    case CommandType::SET_LATENCY:
+      snprintf(buf, size, "setLatency %.3f %.3f", cmd.a, cmd.b);
+      break;
+    case CommandType::GET_INHIBIT_TIME:
+      snprintf(buf, size, "getInhibit");
+      break;
+    case CommandType::SET_INHIBIT_TIME:
+      snprintf(buf, size, "setInhibit %.3f", cmd.a);
+      break;
+    case CommandType::GET_THR_FACTOR:
+      snprintf(buf, size, "getThrFactor");
+      break;
+    case CommandType::SET_THR_FACTOR:
+      snprintf(buf, size, "setThrFactor %.3f", cmd.a);
+      break;
+    case CommandType::SET_UART_OUTPUT:
+      snprintf(buf, size, "%s", cmd.flag ? "setUartOutput 1 1 1 1.0" : "setUartOutput 1 0 1 1.0");
+      break;
+    case CommandType::SET_LED_MODE:
+      snprintf(buf, size, "setLedMode 1 %d", cmd.flag ? 0 : 1);
+      break;
+    case CommandType::SET_GPIO_MODE:
+      snprintf(buf, size, "setGpioMode 1 %d", cmd.flag ? 1 : 2);
+      break;
+    case CommandType::GET_GPIO_MODE:
+      snprintf(buf, size, "getGpioMode 1");
+      break;
+    case CommandType::GET_MICRO_MOTION:
+      snprintf(buf, size, "getMicroMotion");
+      break;
+    case CommandType::SET_MICRO_MOTION:
+      snprintf(buf, size, "setMicroMotion %d", cmd.flag ? 1 : 0);
+      break;
+    case CommandType::FACTORY_RESET:
+      snprintf(buf, size, "resetCfg");
+      break;
+    case CommandType::RESET_SYSTEM:
+      snprintf(buf, size, "resetSystem");
+      break;
+    case CommandType::SAVE_CFG:
+      snprintf(buf, size, "saveConfig");
+      break;
+    case CommandType::SET_RUN_APP:
+      snprintf(buf, size, "setRunApp %d", cmd.flag ? 1 : 0);
+      break;
+    case CommandType::GET_HWV:
+      snprintf(buf, size, "getHWV");
+      break;
+    case CommandType::GET_SWV:
+      snprintf(buf, size, "getSWV");
+      break;
+    default:
+      buf[0] = '\0';
+      break;
+  }
+}
 
 // returns
 //  negative number: failed, abs(return value) is the number of errors that occurred
 //  1: success
 //  0: not done yet
-// if this->retry_power_stop = true then command reported "sensor not stopped", need to send sensorStop command
-uint8_t Command::execute(DFRobotC4001Hub *parent) {
-  this->parent_ = parent;
+// if cmd.retry_power_stop = true then command reported "sensor not stopped", need to send sensorStop command
+int8_t DFRobotC4001Hub::execute_(Command &cmd) {
+  auto result = [&cmd]() -> int8_t { return cmd.error_count < 0 ? cmd.error_count : 1; };
+  auto finish = [&cmd, &result]() -> int8_t {
+    cmd.state = STATE_DONE;
+    return result();
+  };
+
   // send command is separate from the rest of the state machine
-  if (this->state_ == STATE_CMD_SEND) {
-    this->done_ = false;
-    this->error_ = false;
-    this->retry_power_stop = false;
-    if (this->parent_->send_cmd_(this->cmd_.c_str(), this->cmd_duration_ms_)) {
-      this->state_ = STATE_WAIT_ECHO;
+  if (cmd.state == STATE_CMD_SEND) {
+    cmd.done = false;
+    cmd.error = false;
+    cmd.retry_power_stop = false;
+    this->format_command_(cmd, this->cmd_buf_, sizeof(this->cmd_buf_));
+    if (this->send_cmd_(this->cmd_buf_, CMD_DURATION_MS)) {
+      cmd.state = STATE_WAIT_ECHO;
     }
     return 0;
   }
+  if (cmd.state == STATE_DONE)
+    return result();
+
   // surround state machine with a successful read message
-  if (this->parent_->read_message_()) {
-    this->read_buffer_ = this->parent_->read_buffer_;
-    switch (this->state_) {
+  if (this->read_message_()) {
+    switch (cmd.state) {
       case STATE_WAIT_ECHO:
-        if (this->cmd_ == "resetSystem") {
+        if (cmd.type == CommandType::RESET_SYSTEM) {
           // resetSystem command might return garbage, accept anything
-          ESP_LOGV(TAG, "Send Cmd: Complete: %s", this->cmd_.c_str());
-          this->state_ = STATE_DONE;
-          return this->error_count_ < 0 ? this->error_count_ : 1;
-        } else if (strstr(this->read_buffer_, this->cmd_.c_str())) {
-          this->state_ = STATE_PROCESS;
+          ESP_LOGV(TAG, "Send Cmd: Complete: %s", this->cmd_buf_);
+          return finish();
+        }
+        if (strstr(this->read_buffer_, this->cmd_buf_) != nullptr) {
+          cmd.state = STATE_PROCESS;
         }
         break;
       case STATE_PROCESS:
-        if (strstr(this->read_buffer_, "Error")) {
-          this->error_ = true;
-          this->state_ = STATE_WAIT_PROMPT;
+        if (strstr(this->read_buffer_, "Error") != nullptr) {
+          cmd.error = true;
+          cmd.state = STATE_WAIT_PROMPT;
           break;
         }
-        if (strstr(this->read_buffer_, "sensor is not stopped")) {
+        if (strstr(this->read_buffer_, "sensor is not stopped") != nullptr) {
           // Let queue know we need to stop the sensor and then retry this command
-          this->retry_power_stop = true;
+          cmd.retry_power_stop = true;
           break;
         }
-        // process message
-        on_message();
-        if (this->done_) {
-          this->state_ = STATE_WAIT_PROMPT;
+        this->on_message_(cmd);
+        if (cmd.done) {
+          cmd.state = STATE_WAIT_PROMPT;
         }
         break;
       case STATE_WAIT_PROMPT:
-        if (strstr(this->read_buffer_, "DFRobot:/>")) {
-          if (this->error_ || this->retry_power_stop) {
-            if (this->retries_left_ > 0) {
-              this->retries_left_ -= 1;
-              this->error_count_ -= 1;
-              if (this->retry_power_stop) {
-                ESP_LOGD(TAG, "Command Retry: Sensor not stopped");
-                // allow command to be used again
-                this->state_ = STATE_CMD_SEND;
-                // this command is done, but the queue needs to send a commandStop first
-                return this->error_count_ < 0 ? this->error_count_ : 1;
-              } else {
-                ESP_LOGD(TAG, "Command Retry");
-                // reset state to send command again
-                this->state_ = STATE_CMD_SEND;
-                return 0;  // command not done
-              }
-            } else {
-              ESP_LOGE(TAG, "Command Failure");
-              this->error_count_ -= 1;
+        if (strstr(this->read_buffer_, "DFRobot:/>") == nullptr)
+          break;
+        if (cmd.error || cmd.retry_power_stop) {
+          if (cmd.retries_left > 0) {
+            cmd.retries_left--;
+            cmd.error_count--;
+            // allow command to be used again
+            cmd.state = STATE_CMD_SEND;
+            if (cmd.retry_power_stop) {
+              ESP_LOGD(TAG, "Command Retry: Sensor not stopped");
+              // this command stays queued, but the queue needs to send a sensorStop first
+              return result();
             }
-          } else {
-            ESP_LOGV(TAG, "Send Cmd: Complete: %s", this->cmd_.c_str());
+            ESP_LOGD(TAG, "Command Retry");
+            return 0;  // command not done
           }
-          // Command done
-          this->state_ = STATE_DONE;
-          return this->error_count_ < 0 ? this->error_count_ : 1;
+          ESP_LOGE(TAG, "Command Failure");
+          cmd.error_count--;
+        } else {
+          ESP_LOGV(TAG, "Send Cmd: Complete: %s", this->cmd_buf_);
         }
-        break;
-      default:  // STATE_DONE
-        // Command done
-        return this->error_count_ < 0 ? this->error_count_ : 1;
+        return finish();
+      default:
+        return finish();
     }
   }
+
   // check for timeout
-  if (millis() - this->parent_->ts_last_cmd_sent_ > this->timeout_ms_) {
-    if (this->cmd_ == "resetSystem") {
+  if (millis() - this->ts_last_cmd_sent_ > CMD_TIMEOUT_MS) {
+    if (cmd.type == CommandType::RESET_SYSTEM) {
       // resetSystem command doesn't necessarily return anything, bypass retries
       ESP_LOGV(TAG, "Send Cmd: Reset System Command Timeout Bypassed");
-      this->state_ = STATE_DONE;
-      // Command done
-      return this->error_count_ < 0 ? this->error_count_ : 1;
-    } else if (this->retries_left_ > 0) {
-      this->retries_left_ -= 1;
-      ESP_LOGD(TAG, "Command timeout: Retrying");
-      this->state_ = STATE_CMD_SEND;
-      this->error_count_ -= 1;
-      return 0;  // command not done
-    } else {
-      ESP_LOGE(TAG, "Command Failure: %s", this->cmd_.c_str());
-      this->state_ = STATE_DONE;
-      this->error_count_ -= 1;
-      // Command done
-      return this->error_count_ < 0 ? this->error_count_ : 1;
+      return finish();
     }
+    if (cmd.retries_left > 0) {
+      cmd.retries_left--;
+      ESP_LOGD(TAG, "Command timeout: Retrying");
+      cmd.state = STATE_CMD_SEND;
+      cmd.error_count--;
+      return 0;  // command not done
+    }
+    ESP_LOGE(TAG, "Command Failure: %s", this->cmd_buf_);
+    cmd.error_count--;
+    return finish();
   }
   return 0;
 }
 
-void Command::on_message() {
-  if (strstr(this->parent_->read_buffer_, "Done"))
-    this->done_ = true;
+// Handles "Response v1 [v2]" and "Done" lines, skipping 'skip' tokens after "Response".
+// Returns true on "Done".
+bool DFRobotC4001Hub::parse_response_(Command &cmd, uint8_t skip, uint8_t count) {
+  char *token = strtok(this->read_buffer_, " ");
+  if (token == nullptr)
+    return false;
+  if (strcmp(token, "Done") == 0)
+    return true;
+  if (strcmp(token, "Response") == 0) {
+    for (uint8_t i = 0; i < skip; i++)
+      strtok(nullptr, " ");
+    cmd.a = parse_float(strtok(nullptr, " "));
+    if (count > 1)
+      cmd.b = parse_float(strtok(nullptr, " "));
+  }
+  return false;
 }
 
-uint8_t ReadStateCommand::execute(DFRobotC4001Hub *parent) {
-  char *token;
-
-  this->parent_ = parent;
-  if (this->parent_->read_message_()) {
-    if (strstr(this->parent_->read_buffer_, "$DFHPD,0, , , *")) {
-      this->parent_->set_occupancy(false);
-      ESP_LOGV(TAG, "Recv Rpt: Occupancy Clear");
-      return true;  // Command done
-    } else if (strstr(this->parent_->read_buffer_, "$DFHPD,1, , , *")) {
-      this->parent_->set_occupancy(true);
-      ESP_LOGV(TAG, "Recv Rpt: Occupancy Detected");
-      return true;  // Command done
-    } else if (strstr(this->parent_->read_buffer_, "$DFDMD")) {
-      strtok(this->parent_->read_buffer_, ",");
-      token = strtok(NULL, ",");
-      auto target = parse_number<uint8_t>(token);
-      strtok(NULL, ",");
-      token = strtok(NULL, ",");
-      auto target_distance = parse_number<float>(token);
-      token = strtok(NULL, ",");
-      auto target_speed = parse_number<float>(token);
-      token = strtok(NULL, ",");
-      auto target_energy = parse_number<float>(token);
-      if (target.has_value() && target.value() == 1) {
-        // one target is detected
-        if (target_distance.has_value() && target_speed.has_value() && target_energy.has_value()) {
-          // 1 target is detected, that is all this sensor can do
-          this->parent_->set_target_distance(target_distance.value());
-          this->parent_->set_target_speed(target_speed.value());
-          this->parent_->set_target_energy(target_energy.value());
-          this->parent_->set_occupancy(true);
-          ESP_LOGV(TAG, "Recv Rpt: Target Detected, Dist=%.3f, Speed=%.3f, Energy=%u", target_distance.value(),
-                   target_speed.value(), static_cast<unsigned int>(target_energy.value()));
-          return true;  // command completed successfully
+void DFRobotC4001Hub::on_message_(Command &cmd) {
+  switch (cmd.type) {
+    case CommandType::GET_RANGE:
+      if (this->parse_response_(cmd, 0, 2)) {
+        if (std::isnan(cmd.a) || std::isnan(cmd.b)) {
+          parse_failed(cmd);
         } else {
-          ESP_LOGD(TAG, "Error parsing Distance and Speed Detection Output");
-          return true;  // command done with error
+          this->set_min_range(cmd.a, false);
+          this->set_max_range(cmd.b, false);
+          cmd.done = true;
         }
-      } else if (target.has_value() && target == 0) {
-        // no target is detected
-        this->parent_->set_target_distance(0.0);
-        this->parent_->set_target_speed(0.0);
-        this->parent_->set_target_energy(0.0);
-        this->parent_->set_occupancy(false);
-        ESP_LOGV(TAG, "Recv Rpt: No Target");
-        return true;  // command completed successfully
       }
+      break;
+    case CommandType::GET_TRIG_RANGE:
+      if (this->parse_response_(cmd, 0, 1)) {
+        if (std::isnan(cmd.a)) {
+          parse_failed(cmd);
+        } else {
+          this->set_trigger_range(cmd.a, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_SENSITIVITY:
+      if (this->parse_response_(cmd, 0, 2)) {
+        if (std::isnan(cmd.a) || std::isnan(cmd.b)) {
+          parse_failed(cmd);
+        } else {
+          this->set_hold_sensitivity(cmd.a, false);
+          this->set_trigger_sensitivity(cmd.b, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_LATENCY:
+      if (this->parse_response_(cmd, 0, 2)) {
+        if (std::isnan(cmd.a) || std::isnan(cmd.b)) {
+          parse_failed(cmd);
+        } else {
+          this->set_on_latency(cmd.a, false);
+          this->set_off_latency(cmd.b, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_INHIBIT_TIME:
+      if (this->parse_response_(cmd, 0, 1)) {
+        if (std::isnan(cmd.a)) {
+          parse_failed(cmd);
+        } else {
+          // The module tends to add 0.001 when this value is set, remove it here
+          cmd.a = floorf(cmd.a * 500.0f) / 500.0f;
+          this->set_inhibit_time(cmd.a, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_THR_FACTOR:
+      if (this->parse_response_(cmd, 0, 1)) {
+        if (std::isnan(cmd.a)) {
+          parse_failed(cmd);
+        } else {
+          this->set_threshold_factor(cmd.a, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_GPIO_MODE:
+      // "Response 1 <mode>", first value is always '1'
+      if (this->parse_response_(cmd, 1, 1)) {
+        if (std::isnan(cmd.a)) {
+          parse_failed(cmd);
+        } else {
+          this->set_out_led_enable(cmd.a == 1.0f, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::GET_MICRO_MOTION:
+      if (this->parse_response_(cmd, 0, 1)) {
+        if (std::isnan(cmd.a)) {
+          parse_failed(cmd);
+        } else {
+          this->set_micro_motion_enable(cmd.a != 0.0f, false);
+          cmd.done = true;
+        }
+      }
+      break;
+    case CommandType::SET_MICRO_MOTION:
+      if (strcmp(this->read_buffer_, "Done") == 0) {
+        this->set_micro_motion_enable(cmd.flag, false);
+        cmd.done = true;
+      }
+      break;
+    case CommandType::FACTORY_RESET:
+      if (strstr(this->read_buffer_, "Done") != nullptr) {
+        // reload settings
+        this->set_run_led_enable(true);
+        this->flash_run_led_enable();
+        this->setup_module();
+        this->config_load();
+        cmd.done = true;
+      }
+      break;
+    case CommandType::RESET_SYSTEM:
+      // this command responds with nothing, not even a command echo
+      if (cmd.flag) {
+        this->config_load();
+      }
+      ESP_LOGV(TAG, "Send Cmd: %s received something", this->cmd_buf_);
+      cmd.done = true;
+      break;
+    case CommandType::SAVE_CFG:
+      if (strstr(this->read_buffer_, "no parameter has changed") != nullptr) {
+        ESP_LOGV(TAG, "Send Cmd: Nothing Changed");
+      } else if (strstr(this->read_buffer_, "Done") != nullptr) {
+        this->config_load();
+        cmd.done = true;
+      }
+      break;
+    case CommandType::GET_SWV:
+    case CommandType::GET_HWV: {
+      const bool swv = cmd.type == CommandType::GET_SWV;
+      char *token = strtok(this->read_buffer_, ":");
+      if (token == nullptr)
+        break;
+      if (strcmp(token, "Done") == 0) {
+        cmd.done = true;
+      } else if (strcmp(token, swv ? "SoftwareVersion" : "HardwareVersion") == 0) {
+        token = strtok(nullptr, ":");
+        if (token == nullptr) {
+          parse_failed(cmd);
+        } else if (swv) {
+          this->set_software_version(token);
+        } else {
+          this->set_hardware_version(token);
+        }
+      }
+      break;
     }
-  }
-  if (millis() - this->parent_->ts_last_cmd_sent_ > this->timeout_ms_) {
-    return true;  // Command done, timeout
-  }
-  return false;  // Command not done yet.
-}
-
-GetRangeCommand::GetRangeCommand() { this->cmd_ = "getRange"; }
-
-void GetRangeCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->min_range_.has_value() || !this->max_range_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_min_range(this->min_range_.value(), false);
-      this->parent_->set_max_range(this->max_range_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->min_range_ = parse_number<float>(token);
-    token = strtok(NULL, " ");
-    this->max_range_ = parse_number<float>(token);
+    default:
+      if (strstr(this->read_buffer_, "Done") != nullptr)
+        cmd.done = true;
+      break;
   }
 }
 
-SetRangeCommand::SetRangeCommand(float min_range, float max_range) {
-  this->cmd_ = str_sprintf("setRange %.3f %.3f", min_range, max_range);
-};
-
-GetTrigRangeCommand::GetTrigRangeCommand() { this->cmd_ = "getTrigRange"; }
-
-void GetTrigRangeCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->trigger_range_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_trigger_range(this->trigger_range_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->trigger_range_ = parse_number<float>(token);
-  }
-}
-
-SetTrigRangeCommand::SetTrigRangeCommand(float trigger_range) {
-  this->cmd_ = str_sprintf("setTrigRange %.3f", trigger_range);
-};
-
-GetSensitivityCommand::GetSensitivityCommand() { this->cmd_ = "getSensitivity"; }
-
-void GetSensitivityCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->hold_sensitivity_.has_value() || !this->trigger_sensitivity_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_hold_sensitivity(this->hold_sensitivity_.value(), false);
-      this->parent_->set_trigger_sensitivity(this->trigger_sensitivity_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->hold_sensitivity_ = parse_number<float>(token);
-    token = strtok(NULL, " ");
-    this->trigger_sensitivity_ = parse_number<float>(token);
-  }
-}
-
-SetSensitivityCommand::SetSensitivityCommand(float hold_sensitivity, float trigger_sensitivity) {
-  this->cmd_ = str_sprintf("setSensitivity %.0f %.0f", round(hold_sensitivity), round(trigger_sensitivity));
-};
-
-GetLatencyCommand::GetLatencyCommand() { this->cmd_ = "getLatency"; }
-
-void GetLatencyCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->on_latency_.has_value() || !this->off_latency_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_on_latency(this->on_latency_.value(), false);
-      this->parent_->set_off_latency(this->off_latency_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->on_latency_ = parse_number<float>(token);
-    token = strtok(NULL, " ");
-    this->off_latency_ = parse_number<float>(token);
-  }
-}
-
-SetLatencyCommand::SetLatencyCommand(float on_latency, float off_latency) {
-  this->cmd_ = str_sprintf("setLatency %.3f %.3f", on_latency, off_latency);
-};
-
-GetInhibitTimeCommand::GetInhibitTimeCommand() { this->cmd_ = "getInhibit"; }
-
-void GetInhibitTimeCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->inhibit_time_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      // The module tends to add 0.001 when this value is set, remove it here
-      this->inhibit_time_.value() = floor(this->inhibit_time_.value() * 500.0) / 500.0;
-      this->parent_->set_inhibit_time(this->inhibit_time_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->inhibit_time_ = parse_number<float>(token);
-  }
-}
-
-SetInhibitTimeCommand::SetInhibitTimeCommand(float inhibit) { this->cmd_ = str_sprintf("setInhibit %.3f", inhibit); };
-
-GetThrFactorCommand::GetThrFactorCommand() { this->cmd_ = "getThrFactor"; }
-
-void GetThrFactorCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->threshold_factor_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_threshold_factor(this->threshold_factor_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->threshold_factor_ = parse_number<float>(token);
-  }
-}
-
-SetThrFactorCommand::SetThrFactorCommand(float threshold_factor) {
-  this->cmd_ = str_sprintf("setThrFactor %.3f", threshold_factor);
-};
-
-SetLedModeCommand::SetLedModeCommand(bool value) { this->cmd_ = str_sprintf("setLedMode 1 %d", value ? 0 : 1); };
-
-SetGpioModeCommand::SetGpioModeCommand(bool value) { this->cmd_ = str_sprintf("setGpioMode 1 %d", value ? 1 : 2); };
-
-GetGpioModeCommand::GetGpioModeCommand() { this->cmd_ = "getGpioMode 1"; }
-
-void GetGpioModeCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->value_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_out_led_enable(this->value_.value() == 1, false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    strtok(NULL, " ");  // ignore this value, always '1'
-    token = strtok(NULL, " ");
-    this->value_ = parse_number<uint8_t>(token);
-  }
-}
-
-GetMicroMotionCommand::GetMicroMotionCommand() { this->cmd_ = "getMicroMotion"; }
-
-void GetMicroMotionCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, " ");
-  if (strcmp(token, "Done") == 0) {
-    if (!this->micro_motion_.has_value()) {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    } else {
-      this->parent_->set_micro_motion_enable(this->micro_motion_.value(), false);
-      this->done_ = true;  // command is done
-    }
-  } else if (strcmp(token, "Response") == 0) {
-    token = strtok(NULL, " ");
-    this->micro_motion_ = parse_number<bool>(token);
-  }
-}
-
-SetMicroMotionCommand::SetMicroMotionCommand(bool enable) {
-  this->micro_motion_ = enable;
-  this->cmd_ = enable ? "setMicroMotion 1" : "setMicroMotion 0";
-};
-
-void SetMicroMotionCommand::on_message() {
-  if (strcmp(this->read_buffer_, "Done") == 0) {
-    this->parent_->set_micro_motion_enable(this->micro_motion_, false);
-    this->done_ = true;  // command is done
-  }
-}
-
-FactoryResetCommand::FactoryResetCommand() { this->cmd_ = "resetCfg"; }
-
-void FactoryResetCommand::on_message() {
-  if (strstr(this->read_buffer_, "Done")) {
-    // reload settings
-    this->parent_->set_run_led_enable(true);
-    this->parent_->flash_run_led_enable();
-    this->parent_->setup_module();
-    this->parent_->config_load();
-    this->done_ = true;  // command is done
-  }
-}
-
-ResetSystemCommand::ResetSystemCommand(bool read_config) {
-  this->read_config_ = read_config;
-  this->cmd_ = "resetSystem";
-}
-
-void ResetSystemCommand::on_message() {
-  // this command responds with nothing, not even a command echo
-  if (this->read_config_) {
-    this->parent_->config_load();
-  }
-  ESP_LOGV(TAG, "Send Cmd: %s received something", this->cmd_.c_str());
-  this->done_ = true;  // command is done
-}
-
-SaveCfgCommand::SaveCfgCommand() { this->cmd_ = "saveConfig"; }
-
-void SaveCfgCommand::on_message() {
-  if (strstr(this->read_buffer_, "no parameter has changed")) {
-    ESP_LOGV(TAG, "Send Cmd: Nothing Changed");
-  } else if (strstr(this->read_buffer_, "Done")) {
-    this->parent_->config_load();
-    this->done_ = true;  // command is done
-  }
-}
-
-PowerCommand::PowerCommand(bool power_on) { this->cmd_ = power_on ? "sensorStart" : "sensorStop"; };
-
-SetUartOutputCommand::SetUartOutputCommand(bool enable) {
-  this->cmd_ = enable ? "setUartOutput 1 1 1 1.0" : "setUartOutput 1 0 1 1.0";
-};
-
-SetRunAppCommand::SetRunAppCommand(uint8_t mode) { this->cmd_ = mode == MODE_PRESENCE ? "setRunApp 0" : "setRunApp 1"; }
-
-GetSWVCommand::GetSWVCommand() { this->cmd_ = "getSWV"; }
-
-void GetSWVCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, ":");
-  if (strcmp(token, "Done") == 0) {
-    this->done_ = true;  // command is done
-  } else if (strcmp(token, "SoftwareVersion") == 0) {
-    token = strtok(NULL, ":");
-    if (token != nullptr) {
-      this->parent_->set_software_version(token);
-    } else {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
-    }
-  }
-}
-
-GetHWVCommand::GetHWVCommand() { this->cmd_ = "getHWV"; }
-
-void GetHWVCommand::on_message() {
-  char *token;
-
-  token = strtok(this->read_buffer_, ":");
-  if (strcmp(token, "Done") == 0) {
-    this->done_ = true;  // command is done
-  } else if (strcmp(token, "HardwareVersion") == 0) {
-    token = strtok(NULL, ":");
-    if (token != nullptr) {
-      this->parent_->set_hardware_version(token);
-    } else {
-      ESP_LOGD(TAG, "Failed to parse response");
-      this->error_ = true;  // command is done
+// Called from loop() when the command queue is empty
+void DFRobotC4001Hub::read_state_() {
+  if (!this->read_message_())
+    return;
+  if (strstr(this->read_buffer_, "$DFHPD,0, , , *") != nullptr) {
+    this->set_occupancy(false);
+    ESP_LOGV(TAG, "Recv Rpt: Occupancy Clear");
+  } else if (strstr(this->read_buffer_, "$DFHPD,1, , , *") != nullptr) {
+    this->set_occupancy(true);
+    ESP_LOGV(TAG, "Recv Rpt: Occupancy Detected");
+  } else if (strstr(this->read_buffer_, "$DFDMD") != nullptr) {
+    strtok(this->read_buffer_, ",");
+    auto target = parse_number<uint8_t>(safe_token(strtok(nullptr, ",")));
+    strtok(nullptr, ",");
+    auto target_distance = parse_number<float>(safe_token(strtok(nullptr, ",")));
+    auto target_speed = parse_number<float>(safe_token(strtok(nullptr, ",")));
+    auto target_energy = parse_number<float>(safe_token(strtok(nullptr, ",")));
+    if (target.has_value() && target.value() == 1) {
+      // one target is detected, that is all this sensor can do
+      if (target_distance.has_value() && target_speed.has_value() && target_energy.has_value()) {
+        this->set_target_distance(target_distance.value());
+        this->set_target_speed(target_speed.value());
+        this->set_target_energy(target_energy.value());
+        this->set_occupancy(true);
+        ESP_LOGV(TAG, "Recv Rpt: Target Detected, Dist=%.3f, Speed=%.3f, Energy=%u", target_distance.value(),
+                 target_speed.value(), static_cast<unsigned int>(target_energy.value()));
+      } else {
+        ESP_LOGD(TAG, "Error parsing Distance and Speed Detection Output");
+      }
+    } else if (target.has_value() && target.value() == 0) {
+      // no target is detected
+      this->set_target_distance(0.0);
+      this->set_target_speed(0.0);
+      this->set_target_energy(0.0);
+      this->set_occupancy(false);
+      ESP_LOGV(TAG, "Recv Rpt: No Target");
     }
   }
 }
