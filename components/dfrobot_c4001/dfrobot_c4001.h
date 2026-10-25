@@ -42,8 +42,8 @@ enum DFRobotModel : uint8_t {
   MODEL_UNKNOWN,
 };
 
-const uint8_t MMWAVE_READ_BUFFER_LENGTH = 64;
-const uint8_t MMWAVE_CMD_BUFFER_LENGTH = 48;
+static constexpr uint8_t MMWAVE_READ_BUFFER_LENGTH = 64;
+static constexpr uint8_t MMWAVE_CMD_BUFFER_LENGTH = 48;
 
 class DFRobotC4001Hub : public uart::UARTDevice, public Component {
 #ifdef USE_BINARY_SENSOR

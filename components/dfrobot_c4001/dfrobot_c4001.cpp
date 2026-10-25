@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "esphome/core/application.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
@@ -316,52 +317,52 @@ void DFRobotC4001Hub::setup_module() {
   }
 #endif
   // stop the module so that configuration can be set
-  this->enqueue_flag(CommandType::POWER, false);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
   // put the module is the requested mode
-  this->enqueue_flag(CommandType::SET_RUN_APP, this->mode_ != MODE_PRESENCE);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_SET_RUN_APP, this->mode_ != MODE_PRESENCE);
   // the module doesn't remember the RUN led state so it need to be set here
   // this->run_led_enable_ comes from flash which does remember between power cycles
-  this->enqueue_flag(CommandType::SET_LED_MODE, this->run_led_enable_);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_SET_LED_MODE, this->run_led_enable_);
   // the module remembers the OUT led state so it does not need to be set here
   // make sure the module output presence via uart
   if (this->mode_ == MODE_PRESENCE) {
-    this->enqueue_flag(CommandType::SET_UART_OUTPUT, true);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_UART_OUTPUT, true);
   }
   // start the module
-  this->enqueue_flag(CommandType::POWER, true);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, true);
 }
 
 void DFRobotC4001Hub::config_load() {
   // get dfrobot_c4001 current configuration
   // have to be in the right mode to read that mode's parameters
-  this->enqueue(CommandType::GET_HWV);
-  this->enqueue(CommandType::GET_SWV);
+  this->enqueue(CommandType::COMMAND_TYPE_GET_HWV);
+  this->enqueue(CommandType::COMMAND_TYPE_GET_SWV);
   // the module doesn't remember the RUN led state (controlled by LedMode command) so loading from module won't work
   // the OUT led state is controlled by GpioMode command and it is remembered by the module so loading does work
-  this->enqueue(CommandType::GET_GPIO_MODE);
+  this->enqueue(CommandType::COMMAND_TYPE_GET_GPIO_MODE);
 #ifdef USE_NUMBER
   if (this->min_range_number_ != nullptr)
-    this->enqueue(CommandType::GET_RANGE);
+    this->enqueue(CommandType::COMMAND_TYPE_GET_RANGE);
 #endif
   if (this->mode_ == MODE_PRESENCE) {
 #ifdef USE_NUMBER
     if (this->trigger_range_number_ != nullptr)
-      this->enqueue(CommandType::GET_TRIG_RANGE);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_TRIG_RANGE);
     if (this->hold_sensitivity_number_ != nullptr)
-      this->enqueue(CommandType::GET_SENSITIVITY);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_SENSITIVITY);
     if (this->on_latency_number_ != nullptr)
-      this->enqueue(CommandType::GET_LATENCY);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_LATENCY);
     if (this->inhibit_time_number_ != nullptr)
-      this->enqueue(CommandType::GET_INHIBIT_TIME);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_INHIBIT_TIME);
 #endif
   } else {
 #ifdef USE_NUMBER
     if (this->threshold_factor_number_ != nullptr)
-      this->enqueue(CommandType::GET_THR_FACTOR);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_THR_FACTOR);
 #endif
 #ifdef USE_SWITCH
     if (this->micro_motion_enable_switch_ != nullptr)
-      this->enqueue(CommandType::GET_MICRO_MOTION);
+      this->enqueue(CommandType::COMMAND_TYPE_GET_MICRO_MOTION);
 #endif
   }
   this->set_needs_save(false);
@@ -370,51 +371,51 @@ void DFRobotC4001Hub::config_load() {
 void DFRobotC4001Hub::config_save() {
   if (this->needs_save_) {
     this->flash_run_led_enable();
-    this->enqueue_flag(CommandType::POWER, false);
-    this->enqueue_flag(CommandType::SET_LED_MODE, this->run_led_enable_);
-    this->enqueue_flag(CommandType::SET_GPIO_MODE, this->out_led_enable_);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_LED_MODE, this->run_led_enable_);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_SET_GPIO_MODE, this->out_led_enable_);
 #ifdef USE_NUMBER
     if (this->min_range_number_ != nullptr)
-      this->enqueue(CommandType::SET_RANGE, this->min_range_, this->max_range_);
+      this->enqueue(CommandType::COMMAND_TYPE_SET_RANGE, this->min_range_, this->max_range_);
 #endif
     if (this->mode_ == MODE_PRESENCE) {
 #ifdef USE_NUMBER
       if (this->trigger_range_number_ != nullptr)
-        this->enqueue(CommandType::SET_TRIG_RANGE, this->trigger_range_);
+        this->enqueue(CommandType::COMMAND_TYPE_SET_TRIG_RANGE, this->trigger_range_);
       if (this->hold_sensitivity_number_ != nullptr)
-        this->enqueue(CommandType::SET_SENSITIVITY, this->hold_sensitivity_, this->trigger_sensitivity_);
+        this->enqueue(CommandType::COMMAND_TYPE_SET_SENSITIVITY, this->hold_sensitivity_, this->trigger_sensitivity_);
       if (this->on_latency_number_ != nullptr)
-        this->enqueue(CommandType::SET_LATENCY, this->on_latency_, this->off_latency_);
+        this->enqueue(CommandType::COMMAND_TYPE_SET_LATENCY, this->on_latency_, this->off_latency_);
       if (this->inhibit_time_number_ != nullptr)
-        this->enqueue(CommandType::SET_INHIBIT_TIME, this->inhibit_time_);
+        this->enqueue(CommandType::COMMAND_TYPE_SET_INHIBIT_TIME, this->inhibit_time_);
 #endif
     } else {
 #ifdef USE_NUMBER
       if (this->threshold_factor_number_ != nullptr)
-        this->enqueue(CommandType::SET_THR_FACTOR, this->threshold_factor_);
+        this->enqueue(CommandType::COMMAND_TYPE_SET_THR_FACTOR, this->threshold_factor_);
 #endif
 #ifdef USE_SWITCH
       if (this->micro_motion_enable_switch_ != nullptr)
-        this->enqueue_flag(CommandType::SET_MICRO_MOTION, this->micro_motion_enable_);
+        this->enqueue_flag(CommandType::COMMAND_TYPE_SET_MICRO_MOTION, this->micro_motion_enable_);
 #endif
     }
-    this->enqueue(CommandType::SAVE_CFG);
-    this->enqueue_flag(CommandType::RESET_SYSTEM, true);
-    this->enqueue_flag(CommandType::POWER, true);
+    this->enqueue(CommandType::COMMAND_TYPE_SAVE_CFG);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, true);
+    this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, true);
     this->set_needs_save(false);
   }
 }
 
 void DFRobotC4001Hub::factory_reset() {
   ESP_LOGD(TAG, "Factory Reset Started");
-  this->enqueue_flag(CommandType::POWER, false);
-  this->enqueue(CommandType::FACTORY_RESET);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+  this->enqueue(CommandType::COMMAND_TYPE_FACTORY_RESET);
 }
 
 void DFRobotC4001Hub::restart() {
   ESP_LOGD(TAG, "Restart Started");
-  this->enqueue_flag(CommandType::POWER, false);
-  this->enqueue_flag(CommandType::RESET_SYSTEM, true);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_POWER, false);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, true);
 }
 
 void DFRobotC4001Hub::dump_config() {
@@ -486,7 +487,7 @@ void DFRobotC4001Hub::setup() {
   }
 #endif
   // setup the module
-  this->enqueue_flag(CommandType::RESET_SYSTEM, false);
+  this->enqueue_flag(CommandType::COMMAND_TYPE_RESET_SYSTEM, false);
   this->setup_module();
   this->config_load();
 }
@@ -516,7 +517,7 @@ void DFRobotC4001Hub::loop() {
   if (cmd.retry_power_stop) {
     // add PowerCommand to the beginning of the queue to stop the sensor
     Command stop;
-    stop.type = CommandType::POWER;
+    stop.type = CommandType::COMMAND_TYPE_POWER;
     stop.flag = false;
     if (this->push_(stop, true))
       ESP_LOGV(TAG, "Queue: Retrying command after stopping sensor");
@@ -590,11 +591,12 @@ bool DFRobotC4001Hub::read_message_() {
 
 bool DFRobotC4001Hub::send_cmd_(const char *cmd, uint32_t duration) {
   // The interval between two commands must be larger than the specified duration (in ms).
-  if (millis() - this->ts_last_cmd_sent_ > duration) {
+  const uint32_t now = App.get_loop_component_start_time();
+  if (now - this->ts_last_cmd_sent_ > duration) {
     this->write_str(cmd);
     this->write_byte(ASCII_CR);
     this->write_byte(ASCII_LF);
-    this->ts_last_cmd_sent_ = millis();
+    this->ts_last_cmd_sent_ = now;
     ESP_LOGV(TAG, "Send Cmd: %s", cmd);
     return true;  // Command sent
   }

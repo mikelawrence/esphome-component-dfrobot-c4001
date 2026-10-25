@@ -6,7 +6,7 @@
 namespace esphome {
 namespace dfrobot_c4001 {
 
-static const uint8_t COMMAND_QUEUE_SIZE = 32;
+static constexpr uint8_t COMMAND_QUEUE_SIZE = 32;
 
 // Enumeration for Command States
 enum CommandState : uint8_t {
@@ -18,38 +18,38 @@ enum CommandState : uint8_t {
 };
 
 enum class CommandType : uint8_t {
-  POWER,
-  GET_RANGE,
-  SET_RANGE,
-  GET_TRIG_RANGE,
-  SET_TRIG_RANGE,
-  GET_SENSITIVITY,
-  SET_SENSITIVITY,
-  GET_LATENCY,
-  SET_LATENCY,
-  GET_INHIBIT_TIME,
-  SET_INHIBIT_TIME,
-  GET_THR_FACTOR,
-  SET_THR_FACTOR,
-  SET_UART_OUTPUT,
-  SET_LED_MODE,
-  SET_GPIO_MODE,
-  GET_GPIO_MODE,
-  GET_MICRO_MOTION,
-  SET_MICRO_MOTION,
-  FACTORY_RESET,
-  RESET_SYSTEM,
-  SAVE_CFG,
-  SET_RUN_APP,
-  GET_HWV,
-  GET_SWV,
+  COMMAND_TYPE_POWER,
+  COMMAND_TYPE_GET_RANGE,
+  COMMAND_TYPE_SET_RANGE,
+  COMMAND_TYPE_GET_TRIG_RANGE,
+  COMMAND_TYPE_SET_TRIG_RANGE,
+  COMMAND_TYPE_GET_SENSITIVITY,
+  COMMAND_TYPE_SET_SENSITIVITY,
+  COMMAND_TYPE_GET_LATENCY,
+  COMMAND_TYPE_SET_LATENCY,
+  COMMAND_TYPE_GET_INHIBIT_TIME,
+  COMMAND_TYPE_SET_INHIBIT_TIME,
+  COMMAND_TYPE_GET_THR_FACTOR,
+  COMMAND_TYPE_SET_THR_FACTOR,
+  COMMAND_TYPE_SET_UART_OUTPUT,
+  COMMAND_TYPE_SET_LED_MODE,
+  COMMAND_TYPE_SET_GPIO_MODE,
+  COMMAND_TYPE_GET_GPIO_MODE,
+  COMMAND_TYPE_GET_MICRO_MOTION,
+  COMMAND_TYPE_SET_MICRO_MOTION,
+  COMMAND_TYPE_FACTORY_RESET,
+  COMMAND_TYPE_RESET_SYSTEM,
+  COMMAND_TYPE_SAVE_CFG,
+  COMMAND_TYPE_SET_RUN_APP,
+  COMMAND_TYPE_GET_HWV,
+  COMMAND_TYPE_GET_SWV,
 };
 
 // A queued command, stored by value (no heap allocation).
 // a/b hold the float arguments of set commands or the parsed values of get commands (NAN = not parsed).
 // flag holds the on/off argument (power, LED, UART, GPIO, micro motion, run app, reset read_config).
 struct Command {
-  CommandType type{CommandType::POWER};
+  CommandType type{CommandType::COMMAND_TYPE_POWER};
   uint8_t state{STATE_CMD_SEND};
   int8_t retries_left{2};
   int8_t error_count{0};
