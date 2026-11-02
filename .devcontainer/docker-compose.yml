@@ -12,8 +12,8 @@ services:
 
 volumes:
   esphome-cache:
-    name: esphome-components-esphome-cache
+    name: esphome-components-esphome-cache${ESPHOME_CACHE_SUFFIX:-}
   platformio-cache:
-    name: esphome-components-platformio-cache
+    name: esphome-components-platformio-cache${ESPHOME_CACHE_SUFFIX:-}
   validation-cache:
     name: esphome-components-validation-cache

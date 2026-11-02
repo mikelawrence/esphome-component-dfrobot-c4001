@@ -14,6 +14,17 @@ done
 '@
 
 Write-Output "Clearing shared ESPHome, PlatformIO, and pip cache volumes..."
+$imageCacheVolumes = @(
+    & docker.exe volume ls --quiet --filter "name=esphome-components-" |
+        Where-Object { $_ -match '^esphome-components-(esphome|platformio)-cache-.+$' }
+)
+if ($imageCacheVolumes.Count -gt 0) {
+    Write-Output "Removing per-image cache volumes: $($imageCacheVolumes -join ', ')"
+    & docker.exe volume rm @imageCacheVolumes
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to remove per-image cache volumes (exit code $LASTEXITCODE)."
+    }
+}
 & docker.exe compose --file $composeFile run --pull missing --rm --no-deps `
     esphome /bin/bash -lc $clearCacheCommand
 if ($LASTEXITCODE -ne 0) {
