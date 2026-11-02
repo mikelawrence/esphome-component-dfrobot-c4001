@@ -8,7 +8,7 @@ if (-not $docker) {
 
 $clearCacheCommand = @'
 set -e
-for cache_dir in /root/.cache/esphome /root/.platformio /root/.cache/pip; do
+for cache_dir in /root/.cache/esphome /root/.platformio /root/.cache/pip /esphome-data; do
     find "$cache_dir" -mindepth 1 -delete
 done
 '@
@@ -16,7 +16,7 @@ done
 Write-Output "Clearing shared ESPHome, PlatformIO, and pip cache volumes..."
 $imageCacheVolumes = @(
     & docker.exe volume ls --quiet --filter "name=esphome-components-" |
-        Where-Object { $_ -match '^esphome-components-(esphome|platformio)-cache-.+$' }
+        Where-Object { $_ -match '^esphome-components-((esphome|platformio)-cache|data)-.+$' }
 )
 if ($imageCacheVolumes.Count -gt 0) {
     Write-Output "Removing per-image cache volumes: $($imageCacheVolumes -join ', ')"

@@ -195,10 +195,11 @@ try {
 
         foreach ($containerConfigPath in $containerConfigPaths) {
             "$(& $stamp) Compiling $containerConfigPath with $image"
-            # script gives ESPHome a pseudo-TTY so it keeps its own colors; -e passes through the exit code
+            # Do not wrap this in script(1) for a pseudo-TTY: util-linux 2.41 script spins at 100% CPU and
+            # stops draining its pty, which deadlocks esphome and ninja until the build is killed.
             & docker.exe compose --project-name $projectName --file $composeFile run --pull missing --rm --no-deps -T `
-                -e ESPHOME_DATA_DIR=/tmp/esphome-data `
-                --workdir $containerConfigDirectory esphome script -qec "stty cols 160; esphome compile $containerConfigPath" /dev/null 2>&1 |
+                -e ESPHOME_DATA_DIR=/esphome-data `
+                --workdir $containerConfigDirectory esphome esphome compile $containerConfigPath 2>&1 |
                 ForEach-Object { "$(& $stamp) $($_ -replace '\r+$', '')" }
 
             if ($LASTEXITCODE -ne 0) {
