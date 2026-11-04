@@ -526,8 +526,9 @@ void DFRobotC4001Hub::loop() {
     Command stop;
     stop.type = CommandType::COMMAND_TYPE_POWER;
     stop.flag = false;
-    if (this->push_(stop, true))
+    if (this->push_(stop, true)) {
       ESP_LOGV(TAG, "Queue: Retrying command after stopping sensor");
+    }
   } else {
     // negative result means errors occurred magnitude is number of errors
     if (result < 0) {
