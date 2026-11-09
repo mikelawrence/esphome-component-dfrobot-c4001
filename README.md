@@ -24,7 +24,7 @@ More information on the C4001 (SEN0609) sensor is available [here](https://www.d
 external_components:
   - source:
       type: git
-      url: https://github.com/mikelawrence/esphome-components-dfrobot-c4001
+      url: https://github.com/mikelawrence/esphome-component-dfrobot-c4001
 
 uart:
   - id: c4001_uart
@@ -39,7 +39,9 @@ dfrobot_c4001:
   model: SEN0609
 ```
 
-## Configuration Variables
+## Component/Hub
+
+### Configuration Variables
 
 * **id** (*Optional*, [ID](https://esphome.io/guides/configuration-types/#id)): Manually specify the ID for the `dfrobot_c4001` component. Required if there are multiple DFRobot C4001s configured.
 
@@ -49,7 +51,7 @@ dfrobot_c4001:
 
 * **model** (*Required*, enumeration): The sensor model. Options are `SEN0609` and `SEN0610`.
 
-## Buttons
+## Button
 
 The `dfrobot_c4001` button allows you to perform `config save` actions on your DFRobot C4001.
 
@@ -69,7 +71,7 @@ button:
 * **factory_reset** (*Optional*): Clicking this button will perform a factory reset of the module and all configuration values will go back to default. All Options from [Button Component](https://esphome.io/components/button/#base-button-configuration).
 * **restart** (*Optional*): When you click this button the module will restart and all configuration values will remains as previously set. All Options from [Button Component](https://esphome.io/components/button/#base-button-configuration).
 
-## Binary Sensors
+## Binary Sensor
 
 The `dfrobot_c4001` binary sensor report `config changed` and `occupancy` state information about your DFRobot C4001.
 
@@ -89,7 +91,9 @@ binary_sensor:
 * **config_changed** (*Optional*): When `true` the current sensor configuration has been changed but not saved to the sensor. All Options from [Binary Sensor Component](https://esphome.io/components/binary_sensor/#base-binary-sensor-configuration).
 * **occupancy** (*Optional*): In `PRESENCE` mode this indicates presence. In `SPEED_AND_DISTANCE` mode this indicates a target is being tracked. All Options from [Binary Sensor Component](https://esphome.io/components/binary_sensor/#base-binary-sensor-configuration).
 
-## Numbers
+## Number
+
+If any one of the following settings is configured, its partner must also be configured: `min_range` and `max_range`, `hold_sensitivity` and `trigger_sensitivity`, or `on_latency` and `off_latency`.
 
 The `dfrobot_c4001` button allows you to perform `config save` actions on your DFRobot C4001.
 
@@ -128,7 +132,9 @@ number:
 * **inhibit_time** (*Optional*): The dead-time after switching to the not present state before presence can be detected again. Default is 1 (seconds) with a range of 0.1 to 255.0. The `config_save` button must be clicked to save the sensor configuration to flash and make operational. Available only in `PRESENCE` mode. All Options from [Number Component](https://esphome.io/components/number/#base-number-configuration).
 * **threshold_factor** (*Optional*): The larger the number the larger the object and more motion is required to trigger the sensor to switch to target tracked state. Default is 5 with a range of 0 to 65535. The `config_save` button must be clicked to save the sensor configuration to flash and make operational. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Number Component](https://esphome.io/components/number/#base-number-configuration).
 
-## Sensors
+## Sensor
+
+`target_distance`, `target_speed`, and `target_energy` are valid only when the hub's `mode` is `SPEED_AND_DISTANCE`.
 
 The `dfrobot_c4001`  sensors report `software version` and `firmware version` from your DFRobot C4001.
 
@@ -151,7 +157,9 @@ sensor:
 * **target_speed** (*Optional*): When **occupancy** binary sensor is `true` this sensor indicates target speed in meters per second (m/s). When **occupancy** binary sensor is `false` this sensor switches to 0.0 indicating invalid data. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Sensor Component](https://esphome.io/components/sensor/#base-sensor-configuration).
 * **target_energy** (*Optional*): When **occupancy** binary sensor is `true` this sensor indicates target energy in no units. When **occupancy** binary sensor is `false` this sensor switches to 0.0 indicating invalid data. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Sensor Component](https://esphome.io/components/sensor/#base-sensor-configuration).
 
-## Switches
+## Switch
+
+`micro_motion_enable` is valid only when the hub's `mode` is `SPEED_AND_DISTANCE`.
 
 The `dfrobot_c4001` switch allows you to enable the output LED on your DFRobot C4001.
 
@@ -172,7 +180,7 @@ switch:
 * **run_led_enable** (*Optional*): Controls the sensor's run LED. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 * **micro_motion_enable** (*Optional*): Turns on micro motion mode. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 
-## Text Sensors
+## Text Sensor
 
 The `dfrobot_c4001` text sensors report software and hardware versions from your DFRobot C4001.
 
@@ -192,42 +200,18 @@ text_sensor:
 * **software_version** (*Optional*): Software version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
 * **hardware_version** (*Optional*): Hardware version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
 
-## Actions
+## Button usage
 
-* **dfrobot_c4001.factory_reset** Will perform a factory reset of the module and all configuration values will go back to default. The module will restart with these defaults. Keep in mind that these are writes to flash and there is a limited number of time you can do this before the flash wears out. This is much easier to do with a lambda that accidentally performs a factory reset every second.
+The `factory_reset` and `restart` button entities are configured in the Button section above. The corresponding hub methods can also be called from lambdas. Factory reset writes to flash and restarts the module with its factory settings; avoid calling it repeatedly.
 
-Example using automations...
-
-```yaml
-button:
-  - platform: template
-    name: Factory Reset
-    on_press:
-      - dfrobot_c4001.factory_reset: mmwave_sensor
-    entity_category: CONFIG
-```
-
-Example in lambdas...
+Example in a lambda:
 
 ```yaml
 - lambda: |-
   id(mmwave_sensor).factory_reset();
 ```
 
-* **dfrobot_c4001.restart** Will restart the module and all configuration values will remains as previously set.
-
-Example using automations...
-
-```yaml
-button:
-  - platform: template
-    name: Restart
-    on_press:
-      - dfrobot_c4001.restart: mmwave_sensor
-    entity_category: CONFIG
-```
-
-Example in lambdas...
+Restarting leaves the saved configuration unchanged. Example in a lambda:
 
 ```yaml
 - lambda: |-
