@@ -24,7 +24,7 @@ More information on the C4001 (SEN0609) sensor is available [here](https://www.d
 external_components:
   - source:
       type: git
-      url: https://github.com/mikelawrence/esphome-components-dfrobot-c4001
+      url: https://github.com/mikelawrence/esphome-component-dfrobot-c4001
 
 uart:
   - id: c4001_uart
@@ -39,7 +39,9 @@ dfrobot_c4001:
   model: SEN0609
 ```
 
-## Configuration Variables
+## Component/Hub
+
+### Configuration Variables
 
 * **id** (*Optional*, [ID](https://esphome.io/guides/configuration-types/#id)): Manually specify the ID for the `dfrobot_c4001` component. Required if there are multiple DFRobot C4001s configured.
 
@@ -49,7 +51,7 @@ dfrobot_c4001:
 
 * **model** (*Required*, enumeration): The sensor model. Options are `SEN0609` and `SEN0610`.
 
-## Buttons
+## Button
 
 The `dfrobot_c4001` button allows you to perform `config save` actions on your DFRobot C4001.
 
@@ -69,7 +71,7 @@ button:
 * **factory_reset** (*Optional*): Clicking this button will perform a factory reset of the module and all configuration values will go back to default. All Options from [Button Component](https://esphome.io/components/button/#base-button-configuration).
 * **restart** (*Optional*): When you click this button the module will restart and all configuration values will remains as previously set. All Options from [Button Component](https://esphome.io/components/button/#base-button-configuration).
 
-## Binary Sensors
+## Binary Sensor
 
 The `dfrobot_c4001` binary sensor report `config changed` and `occupancy` state information about your DFRobot C4001.
 
@@ -89,7 +91,9 @@ binary_sensor:
 * **config_changed** (*Optional*): When `true` the current sensor configuration has been changed but not saved to the sensor. All Options from [Binary Sensor Component](https://esphome.io/components/binary_sensor/#base-binary-sensor-configuration).
 * **occupancy** (*Optional*): In `PRESENCE` mode this indicates presence. In `SPEED_AND_DISTANCE` mode this indicates a target is being tracked. All Options from [Binary Sensor Component](https://esphome.io/components/binary_sensor/#base-binary-sensor-configuration).
 
-## Numbers
+## Number
+
+If any one of the following settings is configured, its partner must also be configured: `min_range` and `max_range`, `hold_sensitivity` and `trigger_sensitivity`, or `on_latency` and `off_latency`.
 
 The `dfrobot_c4001` button allows you to perform `config save` actions on your DFRobot C4001.
 
@@ -128,7 +132,9 @@ number:
 * **inhibit_time** (*Optional*): The dead-time after switching to the not present state before presence can be detected again. Default is 1 (seconds) with a range of 0.1 to 255.0. The `config_save` button must be clicked to save the sensor configuration to flash and make operational. Available only in `PRESENCE` mode. All Options from [Number Component](https://esphome.io/components/number/#base-number-configuration).
 * **threshold_factor** (*Optional*): The larger the number the larger the object and more motion is required to trigger the sensor to switch to target tracked state. Default is 5 with a range of 0 to 65535. The `config_save` button must be clicked to save the sensor configuration to flash and make operational. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Number Component](https://esphome.io/components/number/#base-number-configuration).
 
-## Sensors
+## Sensor
+
+`target_distance`, `target_speed`, and `target_energy` are valid only when the hub's `mode` is `SPEED_AND_DISTANCE`.
 
 The `dfrobot_c4001`  sensors report `software version` and `firmware version` from your DFRobot C4001.
 
@@ -151,7 +157,9 @@ sensor:
 * **target_speed** (*Optional*): When **occupancy** binary sensor is `true` this sensor indicates target speed in meters per second (m/s). When **occupancy** binary sensor is `false` this sensor switches to 0.0 indicating invalid data. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Sensor Component](https://esphome.io/components/sensor/#base-sensor-configuration).
 * **target_energy** (*Optional*): When **occupancy** binary sensor is `true` this sensor indicates target energy in no units. When **occupancy** binary sensor is `false` this sensor switches to 0.0 indicating invalid data. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Sensor Component](https://esphome.io/components/sensor/#base-sensor-configuration).
 
-## Switches
+## Switch
+
+`micro_motion_enable` is valid only when the hub's `mode` is `SPEED_AND_DISTANCE`.
 
 The `dfrobot_c4001` switch allows you to enable the output LED on your DFRobot C4001.
 
@@ -172,7 +180,7 @@ switch:
 * **run_led_enable** (*Optional*): Controls the sensor's run LED. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 * **micro_motion_enable** (*Optional*): Turns on micro motion mode. Available only in `SPEED_AND_DISTANCE` mode. All Options from [Switch Component](https://esphome.io/components/switch/#base-switch-configuration).
 
-## Text Sensors
+## Text Sensor
 
 The `dfrobot_c4001` text sensors report software and hardware versions from your DFRobot C4001.
 
@@ -192,42 +200,18 @@ text_sensor:
 * **software_version** (*Optional*): Software version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
 * **hardware_version** (*Optional*): Hardware version as reported by the module. All Options from [Text Sensor Component](https://esphome.io/components/text_sensor/#base-text-sensor-configuration).
 
-## Actions
+## Button usage
 
-* **dfrobot_c4001.factory_reset** Will perform a factory reset of the module and all configuration values will go back to default. The module will restart with these defaults. Keep in mind that these are writes to flash and there is a limited number of time you can do this before the flash wears out. This is much easier to do with a lambda that accidentally performs a factory reset every second.
+The `factory_reset` and `restart` button entities are configured in the Button section above. The corresponding hub methods can also be called from lambdas. Factory reset writes to flash and restarts the module with its factory settings; avoid calling it repeatedly.
 
-Example using automations...
-
-```yaml
-button:
-  - platform: template
-    name: Factory Reset
-    on_press:
-      - dfrobot_c4001.factory_reset: mmwave_sensor
-    entity_category: CONFIG
-```
-
-Example in lambdas...
+Example in a lambda:
 
 ```yaml
 - lambda: |-
   id(mmwave_sensor).factory_reset();
 ```
 
-* **dfrobot_c4001.restart** Will restart the module and all configuration values will remains as previously set.
-
-Example using automations...
-
-```yaml
-button:
-  - platform: template
-    name: Restart
-    on_press:
-      - dfrobot_c4001.restart: mmwave_sensor
-    entity_category: CONFIG
-```
-
-Example in lambdas...
+Restarting leaves the saved configuration unchanged. Example in a lambda:
 
 ```yaml
 - lambda: |-
@@ -236,14 +220,10 @@ Example in lambdas...
 
 ## Development with VS Code Dev Containers
 
-Open this component directory as the VS Code workspace, then choose **Reopen in Container**. Docker provides the ESPHome development environment and shares persistent ESPHome, PlatformIO, and pip caches between component checkouts.
+Open the component folder in VS Code and select **Reopen in Container** for development. Docker Desktop is required. The tasks below run from the Windows host workspace using **Terminal > Run Task**:
 
-Run a task from **Terminal > Run Task**. The default build task is also available from **Terminal > Run Build Task**. The three tasks are:
+- **ML ESPHome: Build ESPHome test configs**: The default build task. Validates first, then compiles the test configurations with ESPHome stable, beta, and dev using the local component source.
+- **ML ESPHome: Validate ESPHome component**: Applies supported automatic fixes and checks the component without building test configurations.
+- **ML ESPHome: Clear cached downloads**: Clears shared ESPHome, PlatformIO, and pip caches and removes downloaded ESPHome Docker images. Close the Dev Container before running it.
 
-1. **ML ESPHome: Build ESPHome test configs** — Runs the validation task first and stops if validation fails. If validation passes, compiles every `.yaml` and `.yml` file under `test/` with the ESPHome `stable`, `beta`, and `dev` images. When both stable and beta are selected, beta is skipped if its image reports the same ESPHome version as stable. The script creates temporary copies of the test files, points matching GitHub component sources at this checkout's local `components/` directory, then removes the temporary files. Your original test configurations are not modified. This is the integration/build test; there is no separate unit-test runner.
-2. **ML ESPHome: Validate ESPHome component** — Applies supported automatic fixes, then checks the component without compiling test configurations. Fixes include C/C++ formatting, Ruff formatting and safe lint fixes, pyupgrade, and portable text conventions. It then runs strict YAML linting, C/C++ formatting checks, Ruff format/lint, flake8, pylint, pyupgrade verification, and ESPHome-style text convention checks. Some findings, including yamllint, flake8, pylint, and semantic or unsupported lint issues, require manual attention. Tool versions and lint settings follow ESPHome CI and this repository's `.yamllint`, `.clang-format`, `.flake8`, and `pyproject.toml` files. clang-tidy is not included because it requires PlatformIO compilation metadata.
-3. **ML ESPHome: Clear cached downloads** — Empties the shared ESPHome, PlatformIO, and pip cache volumes and removes locally downloaded `ghcr.io/esphome/esphome` Docker images. Close the Dev Container before running this task so Docker can remove images that are in use. The next build or validation will need to download the required files and images again.
-
-The build task detects the GitHub owner and repository from the checkout's `origin` remote. If there is no GitHub `origin`, run `.devcontainer\build.ps1` directly with `-ComponentSource owner/repository`. To select ESPHome versions, pass `-Versions @("dev")`; to use one custom image, pass `-Image ghcr.io/esphome/esphome:<tag>`.
-
-Build, validation, and cache-clearing containers use Docker's existing default bridge network rather than creating a separate network for each run. Builds and validation also remove unused networks left by older versions of these scripts for this checkout; networks with attached containers and networks from other projects are left alone.
+Use **Terminal > Run Build Task** to run the default build task. Test configuration builds serve as integration tests; there is no separate unit-test runner.
